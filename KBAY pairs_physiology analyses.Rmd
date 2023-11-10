@@ -1,0 +1,3081 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+```{r}
+library(dplyr)
+library(tidyr)
+library(Rmisc)
+library(lubridate)
+library(ggplot2)
+library(car)
+library(MASS)
+library(mgcv)
+library(MuMIn)
+library(emmeans)
+library(ggrepel)
+library(effects)
+library(lme4)
+library(nlme)
+library(sjPlot)
+library(drc)
+library(scales)
+library(xfun)
+```
+#KBay pairs physiology
+```{r}
+phys<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Phys data for R with Teegan no Oct-Nov 2020 and only peak bleaching.csv", strip.white=T)
+phys$Date<- as.Date(phys$Date, format = "%Y-%m-%d")
+phys$Bleach<-as.factor(phys$Bleach)
+phys$Months<-as.factor(phys$Months)
+phys$Species<-as.factor(phys$Species)
+phys$Coral_ID<-as.factor(phys$Coral_ID)
+phys
+```
+```{r}
+unique(phys$Months)
+```
+
+```{r}
+phys_stress= filter(phys, Months %in% c("0","12","24","35"))
+phys_stress
+```
+
+##Endolothics
+```{r}
+endolith<- glm(Endolithic ~ Species*Bleach*Months, data = phys, family = "binomial")
+#summary(endolith)
+car::Anova(endolith, type=3)
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+endofig<-ggplot(phys, aes(y=Endolithic, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_jitter()+
+  #geom_smooth(method="loess")+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Presence~of~endolithic~algae))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        #legend.position=c(0.15,0.85),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+endofig
+```
+
+##Protein
+###Normality
+```{r}
+hist(phys$Protein_mg.cm.2)
+```
+
+```{r}
+protein.lm<- lm(Protein_mg.cm.2~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(protein.lm, ask=FALSE, which=1:6)
+```
+```{r}
+library(MuMIn)
+summary(protein.lme)
+r.squaredGLMM(protein.lme)
+#coef(protein.lme)
+```
+
+###Stats
+```{r}
+protein.lme <- lme(Protein_mg.cm.2~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(protein.lme, type=3)
+tukey3<- emmeans(protein.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Species")
+tukey3
+```
+
+```{r}
+summary(protein.lme)
+r.squaredGLMM(protein.lme)
+```
+####Coefficients
+```{r}
+coef(protein.lme)
+```
+
+```{r}
+proteinavg<-summarySE(phys, measurevar='Protein_mg.cm.2', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+proteinavg
+```
+
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+proteinfig<-ggplot(phys, aes(y=Protein_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+proteinfig
+```
+
+```{r}
+library(Rmisc)
+protein_sum<-summarySE(phys, measurevar='Protein_mg.cm.2', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+protein_sum
+```
+
+```{r}
+proteinfig_3<-ggplot(protein_sum, aes(y=Protein_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=Protein_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.8),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+proteinfig_3
+```
+
+```{r}
+proteinfig_2<-ggplot(protein_sum, aes(y=Protein_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=Protein_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  #geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.8),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+proteinfig_2
+```
+
+
+```{r}
+proteinfig_3<-ggplot(protein_sum, aes(y=Protein_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=Protein_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.8),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+proteinfig_3
+```
+
+
+```{r}
+library(Rmisc)
+protein_stress<-summarySE(phys_stress, measurevar='Protein_mg.cm.2', groupvars=c('Months','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+protein_stress
+```
+
+
+```{r}
+protein_stress_fig<-ggplot(protein_stress, aes(y=Protein_mg.cm.2, x=Months, color=Bleach, fill=Bleach))+ 
+  geom_point(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+protein_stress_fig
+```
+
+
+```{r}
+pd<- position_dodge(0.3)
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+protein_stress_fig2<-ggplot(protein_stress, aes(y=Protein_mg.cm.2, x=Months, color=Bleach, fill=Bleach))+ 
+  #geom_boxplot(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.6)+
+  #geom_point(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.6)+
+  geom_point(size=1.5, position= pd)+
+  geom_errorbar(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), stat="identity",width=0.5, position=pd)+
+  facet_grid(~Species)+
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3))+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Protein~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+protein_stress_fig2
+```
+
+
+##AFDW
+###Normality
+```{r}
+hist(phys$AFDW_mg.cm.2)
+```
+
+```{r}
+AFDW.lm<- lm(AFDW_mg.cm.2~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(AFDW.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+AFDW.lme <- lme(AFDW_mg.cm.2~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(AFDW.lme, type=3)
+tukey3<- emmeans(AFDW.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+
+```{r}
+summary(AFDW.lme)
+r.squaredGLMM(AFDW.lme)
+```
+####Coefficients
+```{r}
+coef(AFDW.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+AFDWfig<-ggplot(phys, aes(y=AFDW_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Total~biomass~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+AFDWfig
+```
+
+```{r}
+pd<- position_dodge(0.3)
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+AFDW_stress_fig<-ggplot(phys_stress, aes(y=AFDW_mg.cm.2, x=Months, color=Bleach, fill=Bleach))+ 
+ geom_point(data=phys_stress,aes(y=AFDW_mg.cm.2, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=AFDW_mg.cm.2, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  #geom_point(size=1.5, position= pd)+
+  #geom_errorbar(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), stat="identity",width=0.5, position=pd)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Total~biomass~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+AFDW_stress_fig
+```
+
+```{r}
+library(Rmisc)
+AFDW_sum<-summarySE(phys, measurevar='AFDW_mg.cm.2', groupvars=c('Date'), na.rm=TRUE, conf.interval = 0.95)
+AFDW_sum
+```
+
+```{r}
+AFDWfig_3<-ggplot(AFDW_sum, aes(y=AFDW_mg.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=AFDW_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=AFDW_mg.cm.2-se, ymax=AFDW_mg.cm.2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(AFDW~(mg~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+AFDWfig_3
+```
+
+##Lipids
+###Normality
+```{r}
+hist(phys$Lipid..g.per.cm2.)
+```
+
+```{r}
+lipid.lm<- lm(Lipid..g.per.cm2.~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(lipid.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+lipid.lme <- lme(Lipid..g.per.cm2.~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(lipid.lme, type=3)
+tukey3<- emmeans(lipid.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+
+```{r}
+summary(lipid.lme)
+r.squaredGLMM(lipid.lme)
+```
+####Coefficients
+```{r}
+coef(lipid.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+lipidfig<-ggplot(phys, aes(y=Lipid..g.per.cm2., x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Lipids~(g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+lipidfig
+```
+
+```{r}
+pd<- position_dodge(0.3)
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+lipid_stress_fig<-ggplot(phys_stress, aes(y=Lipid..g.per.cm2., x=Months, color=Bleach, fill=Bleach))+ 
+ geom_point(data=phys_stress,aes(y=Lipid..g.per.cm2., x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Lipid..g.per.cm2., x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  #geom_point(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.6)+
+  #geom_point(size=1.5, position= pd)+
+  #geom_errorbar(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), stat="identity",width=0.5, position=pd)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Lipids~(g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+lipid_stress_fig
+```
+```{r}
+library(Rmisc)
+lipid_sum<-summarySE(phys, measurevar='Lipid..g.per.cm2.', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+lipid_sum
+```
+
+```{r}
+lipidfig_3<-ggplot(lipid_sum, aes(y=Lipid..g.per.cm2., x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=lipid_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Lipid..g.per.cm2.-se, ymax=Lipid..g.per.cm2.+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Lipid~(g~'\U2219'~cm^{-2})), limits=c(0,15),breaks=c(0,5,10,15))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+lipidfig_3
+```
+
+##TAC
+###Normality
+```{r}
+hist(phys$TAC_CRE.mgprotein.1)
+```
+
+```{r}
+tac.lm<- lm(TAC_CRE.mgprotein.1~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(tac.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+tac.lme <- lme(TAC_CRE.mgprotein.1~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(tac.lme, type=3)
+tukey3<- emmeans(tac.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+```{r}
+summary(tac.lme)
+r.squaredGLMM(tac.lme)
+```
+####Coefficients
+```{r}
+coef(tac.lme)
+```
+
+```{r}
+tacsum<-summarySE(phys, measurevar = "TAC_CRE.mgprotein.1", groupvars = c("Species", "Months", "Bleach"), na.rm=TRUE, conf.interval = 0.95)
+tacsum
+```
+
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+tacfig<-ggplot(phys, aes(y=TAC_CRE.mgprotein.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(TAC~(mu~mol~CRE~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+tacfig
+```
+
+
+```{r}
+pd<- position_dodge(0.3)
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+tac_stress_fig<-ggplot(phys_stress, aes(y=TAC_CRE.mgprotein.1, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=TAC_CRE.mgprotein.1, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=TAC_CRE.mgprotein.1, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  #geom_point(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.6)+
+  #geom_point(size=1.5, position= pd)+
+  #geom_errorbar(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), stat="identity",width=0.5, position=pd)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(TAC~(mu~mol~CRE~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+tac_stress_fig
+```
+```{r}
+library(Rmisc)
+tac_sum<-summarySE(phys, measurevar='TAC_CRE.mgprotein.1', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+tac_sum
+```
+
+```{r}
+tacfig_3<-ggplot(tac_sum, aes(y=TAC_CRE.mgprotein.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=tac_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=TAC_CRE.mgprotein.1-se, ymax=TAC_CRE.mgprotein.1+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(TAC~(mu~mol~CRE~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+tacfig_3
+```
+
+
+##Citrate synthase
+###Normality
+```{r}
+hist(phys$Citrate.synthase.mU.mg.protein.1)
+```
+
+```{r}
+cs.lm<- lm(Citrate.synthase.mU.mg.protein.1~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(cs.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+cs.lme <- lme(Citrate.synthase.mU.mg.protein.1~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(cs.lme, type=3)
+tukey3<- emmeans(cs.lme, list(pairwise ~ Bleach), adjust = "tukey")
+tukey3
+```
+
+```{r}
+summary(cs.lme)
+r.squaredGLMM(cs.lme)
+```
+####Coefficients
+```{r}
+coef(cs.lme)
+```
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+csfig<-ggplot(phys, aes(y=Citrate.synthase.mU.mg.protein.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_wrap(~Species, scales="free")+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(CS~Specific~Activity~(mU~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+csfig
+```
+
+```{r}
+csfig2<-ggplot(phys, aes(y=Citrate.synthase.mU.mg.protein.1, x=Sym.density_10.6cells.cm.2, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="lm")+
+  facet_grid(~Species)+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+csfig2 ##this follows the patterns seen in Hawkins et al 2016
+```
+```{r}
+csfig3<-ggplot(phys, aes(y=Rabs, x=Citrate.synthase.mU.mg.protein.1, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="lm")+
+  #geom_hline(yintercept = 0, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  facet_wrap(~Species, scales = "free")+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+csfig3 ##this follows the patterns seen in Hawkins et al 2016
+```
+
+
+```{r}
+csfig3<-ggplot(phys, aes(y=Rabs, x=Citrate.synthase.mU.mg.protein.1, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="lm")+
+  #geom_hline(yintercept = 0, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  facet_wrap(~Species, scales = "free")+
+  scale_y_continuous(expression(Respiration~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})))+
+  scale_x_continuous(expression(CS~Specific~Activity~(mU~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+csfig3 ##this follows the patterns seen in Hawkins et al 2016
+```
+```{r}
+csfig4<-ggplot(phys, aes(y=Rabs, x=Citrate.synthase.mU.mg.protein.1))+ 
+  geom_point(aes(color=Bleach),alpha=0.4)+
+  geom_smooth(method="lm",color = 'black',)+
+  #geom_hline(yintercept = 0, linetype="solid",  size=0.7, show.legend = TRUE)+
+  #facet_wrap(~Species, scales = "free")+
+  scale_y_continuous(expression(Respiration~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})))+
+  scale_x_continuous(expression(CS~Specific~Activity~(mU~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+csfig4 ##this follows the patterns seen in Hawkins et al 2016
+```
+```{r}
+csfigs<-cowplot::plot_grid(csfig4, csfig3, nrow = 1, ncol = 2, rel_heights = c(1,2.5), labels=c('(a)','(b)'))
+csfigs
+```
+
+```{r}
+pd<- position_dodge(0.3)
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+cs_stress_fig<-ggplot(phys_stress, aes(y=Citrate.synthase.mU.mg.protein.1, x=Months, color=Bleach, fill=Bleach))+ 
+  geom_boxplot(alpha=0.6)+
+  #geom_point(data=phys_stress,aes(y=Protein_mg.cm.2, x=Months, color=Bleach), alpha=0.6)+
+  #geom_point(size=1.5, position= pd)+
+  #geom_errorbar(aes(ymin=Protein_mg.cm.2-se, ymax=Protein_mg.cm.2+se), stat="identity",width=0.5, position=pd)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(CS~Specific~Activity~(U~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+cs_stress_fig
+```
+```{r}
+library(Rmisc)
+cs_sum<-summarySE(phys, measurevar='Citrate.synthase.mU.mg.protein.1', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+cs_sum
+```
+
+```{r}
+csfig_3<-ggplot(cs_sum, aes(y=Citrate.synthase.mU.mg.protein.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=cs_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Citrate.synthase.mU.mg.protein.1-se, ymax=Citrate.synthase.mU.mg.protein.1+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+ scale_y_continuous(expression(CS~Specific~Activity~(U~'\U2219'~mg~protein^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+csfig_3
+```
+
+```{r}
+csfigs<-cowplot::plot_grid(csfig, csfig2, nrow = 2, ncol = 1)
+csfigs
+```
+
+
+##Symbiont density
+###Normality
+```{r}
+hist(phys$Sym.density_10.6cells.cm.2)
+```
+
+```{r}
+sym.lm<- lm(Sym.density_10.6cells.cm.2~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(sym.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+sym.lme <- lme(Sym.density_10.6cells.cm.2~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(sym.lme, type=3)
+tukey3<- emmeans(sym.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+
+```{r}
+summary(sym.lme)
+r.squaredGLMM(sym.lme)
+```
+####Coefficients
+```{r}
+coef(sym.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+symfig<-ggplot(phys, aes(y=Sym.density_10.6cells.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Symbiont~density~(10^{6}~cells~'\U2219'~cm^{-2})), limits=c(-0,5))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+symfig
+```
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+sym_stress_fig<-ggplot(phys_stress, aes(y=Sym.density_10.6cells.cm.2, x=Months, color=Bleach, fill=Bleach))+ 
+  geom_point(data=phys_stress,aes(y=Sym.density_10.6cells.cm.2, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Sym.density_10.6cells.cm.2, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Symbiont~density~(10^{6}~cells~'\U2219'~cm^{-2})), limits=c(0,5))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+sym_stress_fig
+```
+
+```{r}
+library(Rmisc)
+sym_sum<-summarySE(phys, measurevar='Sym.density_10.6cells.cm.2', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+sym_sum
+```
+
+```{r}
+symfig_3<-ggplot(sym_sum, aes(y=Sym.density_10.6cells.cm.2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=sym_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "sym", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Sym.density_10.6cells.cm.2-se, ymax=Sym.density_10.6cells.cm.2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Symbiont~density~(10^{6}~cells~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+symfig_3
+```
+
+```{r}
+lmfig<-ggplot(phys, aes(y=Sym.density_10.6cells.cm.2, x=AFDW_mg.cm.2, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="lm")+
+  #facet_grid(~Species)+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+lmfig ##this follows the patterns seen in Hawkins et al 2016
+```
+
+##Chlorphyll a
+###Normality
+```{r}
+hist(phys$Chl.a_ug.cm2)
+```
+
+```{r}
+chla.lm<- lm(Chl.a_ug.cm2~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(chla.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+chla.lme <- lme(Chl.a_ug.cm2~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(chla.lme, type=3)
+tukey3<- emmeans(chla.lme, list(pairwise ~ Months), adjust = "tukey")
+tukey3
+```
+
+```{r}
+summary(chla.lme)
+r.squaredGLMM(chla.lme)
+```
+####Coefficients
+```{r}
+coef(chla.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+chlafig<-ggplot(phys, aes(y=Chl.a_ug.cm2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(mu~g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+chlafig
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+chla_stress_fig<-ggplot(phys_stress, aes(y=Chl.a_ug.cm2, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=Chl.a_ug.cm2, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Chl.a_ug.cm2, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(mu~g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+chla_stress_fig
+```
+
+```{r}
+library(Rmisc)
+chla_sum<-summarySE(phys, measurevar='Chl.a_ug.cm2', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+chla_sum
+```
+
+```{r}
+chlafig_3<-ggplot(chla_sum, aes(y=Chl.a_ug.cm2, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=chla_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "chla", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Chl.a_ug.cm2-se, ymax=Chl.a_ug.cm2+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(mu~g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+chlafig_3
+```
+
+##Chlorphyll a per symbiont
+###Normality
+```{r}
+hist(phys$pg.Chl.a.per.zoox)
+```
+
+```{r}
+chla.lm<- lm(pg.Chl.a.per.zoox~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(chla.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+chla.lme <- lme(pg.Chl.a.per.zoox~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(chla.lme, type=3)
+tukey3<- emmeans(chla.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+chlafig2<-ggplot(phys, aes(y=pg.Chl.a.per.zoox, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(pg~'\U2219'~cell^{-1})), limits=c(0,50))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+chlafig2
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+chla_stress_fig2<-ggplot(phys_stress, aes(y=pg.Chl.a.per.zoox, x=Months, color=Bleach, fill=Bleach))+ 
+  #geom_point(alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(pg~'\U2219'~cell^{-1})), limits=c(0,50))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+chla_stress_fig2
+```
+
+
+```{r}
+library(Rmisc)
+chlacell_sum<-summarySE(phys, measurevar='pg.Chl.a.per.zoox', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+chlacell_sum
+```
+
+```{r}
+chlacellfig_3<-ggplot(chlacell_sum, aes(y=pg.Chl.a.per.zoox, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=chlacell_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "chlacell", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=pg.Chl.a.per.zoox-se, ymax=pg.Chl.a.per.zoox+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Chlorophyll~italic(a)~(pg~'\U2219'~cell^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+chlacellfig_3
+```
+
+
+##Melanin
+
+###Normality
+
+```{r}
+hist(phys$Melanin_per_tissue)
+```
+```{r}
+mel.lm<- lm(Melanin_per_tissue~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(mel.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+mel.lme <- lme(Melanin_per_tissue~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(mel.lme, type=3)
+tukey3<- emmeans(mel.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+
+```{r}
+summary(mel.lme)
+r.squaredGLMM(mel.lme)
+```
+####Coefficients
+```{r}
+coef(mel.lme)
+```
+###Figure
+
+```{r}
+#mel$Date<- as.Date(as.POSIXct(mel$Date, origin="1970-01-01"))
+melfig<-ggplot(phys, aes(y=Melanin_per_tissue, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Melanin~(mg~melanin~'\U2219'~mg~tissue^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+melfig
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+mel_stress_fig<-ggplot(phys_stress, aes(y=Melanin_per_tissue, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=Melanin_per_tissue, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Melanin_per_tissue, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Melanin~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+mel_stress_fig
+```
+
+```{r}
+library(Rmisc)
+mel_sum<-summarySE(phys, measurevar='Melanin_per_tissue', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+mel_sum
+```
+
+```{r}
+melfig_3<-ggplot(mel_sum, aes(y=Melanin_per_tissue, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=mel_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "mel", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Melanin_per_tissue-se, ymax=Melanin_per_tissue+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Melanin~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(0,0.003))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+melfig_3
+```
+
+##PPO
+
+```{r}
+ppo<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/PPO all R.csv", strip.white=T)
+ppo$Date<- as.Date(ppo$Date, format = "%Y-%m-%d")
+ppo$Bleach<-as.factor(ppo$Bleach)
+#ppo$Months<-as.factor(ppo$Months)
+ppo$Species<-as.factor(ppo$Species)
+ppo$Coral_ID<-as.factor(ppo$Coral_ID)
+ppo
+```
+###Normality
+
+```{r}
+hist(phys$PPO)
+```
+
+```{r}
+ppo.lm<- lm(PPO~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(ppo.lm, ask=FALSE, which=1:6)
+```
+
+###Stats
+```{r}
+ppo.lme <- lme(PPO~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(ppo.lme, type=3)
+tukey3<- emmeans(ppo.lme, list(pairwise ~ Species:Bleach:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+```{r}
+summary(ppo.lme)
+r.squaredGLMM(ppo.lme)
+```
+####Coefficients
+```{r}
+coef(ppo.lme)
+```
+###Figure
+
+```{r}
+#ppo$Date<- as.Date(as.POSIXct(ppo$Date, origin="1970-01-01"))
+ppofig<-ggplot(phys, aes(y=PPO, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+ppofig
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+ppo_stress_fig<-ggplot(phys_stress, aes(y=PPO, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=PPO, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=PPO, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+ppo_stress_fig
+```
+
+```{r}
+library(Rmisc)
+ppo_sum<-summarySE(phys, measurevar='PPO', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+ppo_sum
+```
+
+```{r}
+ppofig_3<-ggplot(ppo_sum, aes(y=PPO, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=ppo_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "ppo", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=PPO-se, ymax=PPO+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(0,1.25))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+ppofig_3
+```
+
+
+##Pnet
+###Normality
+```{r}
+hist(phys$Pmax)
+```
+
+```{r}
+Pnet.lm<- lm(Pmax~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(Pnet.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+Pnet.lme <- lme(Pmax~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(Pnet.lme, type=3)
+tukey3<- emmeans(Pnet.lme, list(pairwise ~ Months), adjust = "tukey")
+tukey3
+tukey3<- emmeans(Pnet.lme, list(pairwise ~Species:Months), adjust = "tukey", simple="Months")
+tukey3 #no differences within Species and Bleach 
+```
+```{r}
+summary(Pnet.lme)
+r.squaredGLMM(Pnet.lme)
+```
+####Coefficients
+```{r}
+coef(Pnet.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+Pnetfig<-ggplot(phys, aes(y=Pmax, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+Pnetfig
+```
+
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+Pnetfig2<-ggplot(phys, aes(y=Pmax, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(limits=as.Date(c("2020-08-01","2022-03-15")),date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+Pnetfig2
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+pnet_stress_fig<-ggplot(phys_stress, aes(y=Pmax, x=Months, color=Bleach, fill=Bleach))+ 
+ geom_point(data=phys_stress,aes(y=Pmax, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=Pmax, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+pnet_stress_fig
+```
+```{r}
+library(Rmisc)
+Pnet_sum<-summarySE(phys, measurevar='Pmax', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+Pnet_sum
+```
+
+```{r}
+Pnetfig_3<-ggplot(Pnet_sum, aes(y=Pmax, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=Pnet_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "Pnet", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=Pmax-se, ymax=Pmax+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Gross~photosynthesis~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})), limits=c(0,4))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+Pnetfig_3
+```
+
+##LEDR
+###Normality
+```{r}
+hist(phys$R)
+```
+
+```{r}
+LEDR.lm<- lm(R~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(LEDR.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+LEDR.lme <- lme(R~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(LEDR.lme, type=3)
+tukey3<- emmeans(LEDR.lme, list(pairwise ~ Species:Months), adjust = "tukey", simple="Species")
+tukey3
+```
+```{r}
+summary(LEDR.lme)
+r.squaredGLMM(LEDR.lme)
+```
+####Coefficients
+```{r}
+coef(LEDR.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+LEDRfig<-ggplot(phys, aes(y=R, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+LEDRfig
+```
+
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+LEDRfig2<-ggplot(phys, aes(y=R, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(limits=as.Date(c("2020-08-01","2022-03-15")),date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+LEDRfig2
+```
+
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+LEDR_stress_fig<-ggplot(phys_stress, aes(y=R, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=R, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=R, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+LEDR_stress_fig
+```
+
+
+```{r}
+library(Rmisc)
+LEDR_sum<-summarySE(phys, measurevar='R', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+LEDR_sum
+```
+
+```{r}
+LEDRfig_3<-ggplot(LEDR_sum, aes(y=abs(R), x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=LEDR_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "LEDR", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=abs(R)-se, ymax=abs(R)+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Respiration~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})))+
+  #geom_hline(yintercept = 0, size=0.75, color = "black") + 
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+LEDRfig_3
+```
+##alpha
+###Normality
+```{r}
+hist(phys$alpha)
+```
+
+```{r}
+alpha.lm<- lm(alpha~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(alpha.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+alpha.lme <- lme(alpha~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(alpha.lme, type=3)
+tukey3<- emmeans(alpha.lme, list(pairwise ~ Months), adjust = "tukey")
+tukey3
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+alphafig<-ggplot(phys, aes(y=alpha, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+alphafig
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+alphafig2<-ggplot(phys, aes(y=alpha, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(limits=as.Date(c("2020-08-01","2022-03-15")),date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+alphafig2
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+alpha_stress_fig<-ggplot(phys_stress, aes(y=alpha, x=Months, color=Bleach, fill=Bleach))+ 
+  #geom_point(alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  geom_boxplot(alpha=0.6,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+alpha_stress_fig
+```
+
+##P:R
+###Normality
+```{r}
+hist(phys$PR)
+```
+
+```{r}
+PR.lm<- lm(PR~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(PR.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+PR.lme <- lme(PR~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(PR.lme, type=3)
+tukey3<- emmeans(PR.lme, list(pairwise ~ Bleach ), adjust = "tukey")
+tukey3
+```
+```{r}
+summary(PR.lme)
+r.squaredGLMM(PR.lme)
+```
+####Coefficients
+```{r}
+coef(protein.lme)
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+prfig2<-ggplot(phys, aes(y=PR, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(limits=as.Date(c("2020-08-01","2022-03-15")),date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+prfig2
+```
+
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+prfig<-ggplot(phys, aes(y=PR, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+prfig
+```
+```{r}
+library(Rmisc)
+PR_sum<-summarySE(phys, measurevar='PR', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+PR_sum
+```
+
+```{r}
+PRfig_3<-ggplot(PR_sum, aes(y=PR, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=PR_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "PR", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=PR-se, ymax=PR+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+  scale_y_continuous(expression(Photosynthesis:Respiration), limits=c(0,7))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+PRfig_3
+```
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PR_stress_fig<-ggplot(phys_stress, aes(y=PR, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=PR, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=PR, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(PPO~activity~(Delta~Abs~490~nm~'\U2219'~mg~protein^{-1}~'\U2219'~min^{-1})), limits=c(-0.1,1.75))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PR_stress_fig
+```
+
+```{r}
+library(cowplot)
+respall<-cowplot::plot_grid(Pnetfig,LEDRfig, nrow=3,ncol=1, align="h", axis = "bt")
+respall
+```
+
+##PI curves
+
+```{r}
+PIOct19<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Oct 2019 PI curve_Teegan.csv", stringsAsFactors=FALSE, fileEncoding="latin1")
+PIOct19$rad<-as.numeric(PIOct19$rad)
+PIOct19
+```
+###Figure - Oct19
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfig_Oct19<-ggplot(PIOct19, aes(y=umol.O2.L.hr, x=rad, color=Phenotype, fill=Phenotype))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})), limits=c(-2,3))+
+  geom_hline(yintercept = 0, linetype = 1, alpha = 0.8, color = "black") + 
+  scale_fill_manual("Phenotype", values=c("Susceptible"= '#DFD3B9',"Resistant"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Phenotype", values=c("Susceptible"= '#DFD3B9',"Resistant"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfig_Oct19
+```
+
+```{r}
+PIOct<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/2021.10.10_KBaypairs_respirometry/Raw_KTB.csv", stringsAsFactors=FALSE, fileEncoding="latin1")
+PIOct$rad<-as.numeric(PIOct$rad)
+PIOct
+```
+###Figure - Oct21
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfig<-ggplot(PIOct, aes(y=umol.O2.L.hr, x=rad, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}), limits=c(0,1682))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})), limits=c(-2,3))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  geom_hline(yintercept = 0, linetype = 1, alpha = 0.8, color = "black") + 
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfig
+```
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfig2<-ggplot(PIOct, aes(y=umol.O2.L.hr, x=rad, color=Bleach, fill=Bleach))+ 
+  geom_path()+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfig2
+```
+```{r}
+PIMar<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/March 2022 Respirometry/March22_KTB2.csv", stringsAsFactors=FALSE, fileEncoding="latin1")
+PIMar$rad<-as.numeric(PIMar$rad)
+PIMar
+```
+
+###Figure - Mar22
+```{r}
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfigmarch<-ggplot(PIMar, aes(y=umol.O2.L.hr, x=rad, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}), limits=c(0,1682))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})), limits=c(-2,3))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  geom_hline(yintercept = 0, linetype = 1, alpha = 0.8, color = "black") + 
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfigmarch
+```
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfig2<-ggplot(PIMar, aes(y=umol.O2.L.hr, x=rad, color=Bleach, fill=Bleach))+ 
+  geom_path()+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfig2
+```
+```{r}
+PISept<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Sept 2022 Respirometry/Sept2022_slopes_raw.csv", stringsAsFactors=FALSE, fileEncoding="latin1")
+PISept$rad<-as.numeric(PISept$rad)
+PISept$umol.O2.L.hr.cm2<-as.numeric(PISept$umol.O2.L.hr.cm2)
+PISept
+```
+###Figure - Sept22
+```{r}
+#phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+PIfig3<-ggplot(PISept, aes(y=umol.O2.L.hr.cm2, x=rad, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_continuous(Irradiance~(mu~mol~'\U2219'~m^{-2}~'\U2219'~s^{-1}), limits=c(0,1682))+ 
+  scale_y_continuous(expression(Oxygen~evolution~(mu~mol~'\U2219'~h^{-1}~'\U2219'~cm^{-2})),limits=c(-2,3))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  geom_hline(yintercept = 0, linetype = 1, alpha = 0.8, color = "black") + 
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+PIfig3
+```
+
+```{r}
+library(cowplot)
+curves<-cowplot::plot_grid(PIfig_Oct19,PIfig,PIfigmarch, PIfig3, nrow=2,ncol=2, align="h", axis = "bt")
+curves
+```
+
+
+##CaCO3 density
+###Normality
+```{r}
+hist(phys$CaCO3.Density_g.mL.1)
+```
+
+```{r}
+density.lm<- lm(CaCO3.Density_g.mL.1~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(density.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+density.lme <- lme(CaCO3.Density_g.mL.1~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(density.lme, type=3)
+tukey3<- emmeans(density.lme, list(pairwise ~ Species:Bleach:Months), adjust = "tukey", simple="Months")
+tukey3
+```
+```{r}
+summary(density.lme)
+r.squaredGLMM(density.lme)
+```
+####Coefficients
+```{r}
+coef(density.lme)
+```
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+densityfig<-ggplot(phys, aes(y=CaCO3.Density_g.mL.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})), limits=c(1,2.5))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+densityfig
+```
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+density_stress_fig<-ggplot(phys_stress, aes(y=CaCO3.Density_g.mL.1, x=Months, color=Bleach, fill=Bleach))+ 
+geom_point(data=phys_stress,aes(y=CaCO3.Density_g.mL.1, x=Months, color=Bleach), alpha=0.9,position=position_jitterdodge())+
+  geom_boxplot(data=phys_stress,aes(y=CaCO3.Density_g.mL.1, x=Months, color=Bleach), alpha=0.5, color="black", outlier.shape = NA)+
+  geom_boxplot( alpha=0.6,  outlier.shape = NA, color="black")+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})), limits=c(1,2.5))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+density_stress_fig
+```
+```{r}
+library(Rmisc)
+density_sum<-summarySE(phys, measurevar='CaCO3.Density_g.mL.1', groupvars=c('Date','Species', 'Bleach'), na.rm=TRUE, conf.interval = 0.95)
+density_sum
+```
+
+```{r}
+densityfig_3<-ggplot(density_sum, aes(y=CaCO3.Density_g.mL.1, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(size=1, position=position_dodge(0.3),stat="identity")+
+  #geom_point(data=phys, aes(y=density_mg.cm.2, x=Date), alpha=0.4)+
+  #geom_smooth(method="gam", formula = y ~ s(x, bs = "density", k=3), se=F)+
+  facet_wrap(~Species)+
+  geom_linerange(aes(ymin=CaCO3.Density_g.mL.1-se, ymax=CaCO3.Density_g.mL.1+se), width= 0.7,  position=position_dodge(0.3),stat="identity") +
+  geom_path(aes(group = interaction(Bleach), stat="identity"), position=position_dodge(0.3), linetype="solid")+
+  scale_x_date(breaks = as.Date(c("2019-10-01","2020-02-01","2020-06-01","2020-10-01","2021-02-01","2021-06-01","2021-10-01","2022-02-01","2022-06-01","2022-10-01")), date_labels = "%b %Y")+ 
+ scale_y_continuous(expression(CaCO[3]~density~(g~'\U2219'~mL^{-1})), limits=c(1.2,2.2))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12,face="italic"))
+densityfig_3
+```
+##Internal volume
+###Normality
+```{r}
+hist(phys$X.internal.volume)
+```
+
+```{r}
+intvol.lm<- lm(X.internal.volume~Species*Bleach*Months, data=phys) #Gaussian
+par(mfrow=c(2,3))
+plot(intvol.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+intvol.lme <- lme(X.internal.volume~Species*Bleach*Months, random = ~1|Coral_ID, data=phys, na.action=na.exclude)
+car::Anova(intvol.lme, type=3)
+tukey3<- emmeans(intvol.lme, list(pairwise ~ Species:Bleach:Months), adjust = "tukey", simple="Bleach")
+tukey3
+```
+
+###Figure
+```{r}
+phys$Date<- as.Date(as.POSIXct(phys$Date, origin="1970-01-01"))
+intvolfig<-ggplot(phys, aes(y=X.internal.volume, x=Date, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.4)+
+  geom_smooth(method="gam", formula = y ~ s(x, bs = "cs", k=3))+
+  #geom_boxplot(aes(group = interaction(Date,Bleach), stat="identity"), alpha=0.7,  outlier.shape = NA)+
+  facet_grid(~Species)+
+  scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  scale_y_continuous(expression(Internal~volume~("%")))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12, angle=90),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+intvolfig
+```
+```{r}
+library(cowplot)
+allphys<-cowplot::plot_grid(proteinfig_3,lipidfig_3,AFDWfig_3,densityfig_3,ppofig_3,melfig_3, symfig_3,chlafig_3,chlacellfig_3, Pnetfig_3, LEDRfig_3,PRfig_3,nrow=4, ncol=3,  align="h", axis = "bt")
+allphys
+```
+```{r}
+library(cowplot)
+allphyssupp<-cowplot::plot_grid(tacfig_3,csfig_3,ppofig_3,melfig_3, chlacellfig_3,tacfig_3,csfig_3,ppofig_3,melfig_3, chlacellfig_3,melfig_3, chlacellfig_3,nrow=4, ncol=3,  align="h", axis = "bt")
+allphyssupp
+```
+
+```{r}
+library(cowplot)
+phys2<-plot_grid(proteinfig,symfig, nrow=2, ncol=1,  align="h", axis = "bt")
+phys2
+```
+#Composite Figure
+```{r}
+library(cowplot)
+allphys_stress<-cowplot::plot_grid(AFDW_stress_fig,protein_stress_fig,lipid_stress_fig, density_stress_fig,sym_stress_fig,chla_stress_fig,tac_stress_fig,mel_stress_fig,ppo_stress_fig,pnet_stress_fig,LEDR_stress_fig,PR_stress_fig, nrow=4, ncol=3,  align="h", axis = "bt")
+allphys_stress
+```
+
+```{r}
+library(cowplot)
+allphys_stress<-cowplot::plot_grid(proteinfig,AFDWfig,lipidfig,densityfig,symfig,chlafig,tacfig,ppofig,csfig,Pnetfig_3,LEDRfig_3,PRfig_3, nrow=4, ncol=3,  align="h", axis = "bt")
+allphys_stress
+```
+
+##Multivariate 
+
+```{r}
+phys<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Phys data with Teegan MDS no Oct-Nov 2020 and only peak heatwave.csv", strip.white=T)
+phys$Date<- as.Date(phys$Date, format = "%Y-%m-%d")
+phys$Bleach<-as.factor(phys$Bleach)
+phys$Months<-as.factor(phys$Months)
+phys$Coral<-as.factor(phys$Coral)
+phys$Coral_ID<-as.factor(phys$Coral_ID)
+phys
+```
+```{r}
+library(lubridate)
+library(dplyr)
+#grouping each June-March; Jan-Mar "recovery"; June to June calendar year; heat stress (date when it falls below MMM) define this as recovery; bleaching remains Jan/Feb
+phys$day <- day(as.POSIXlt(phys$Date))
+phys$month <- month(as.POSIXlt(phys$Date))
+phys$year <- year(as.POSIXlt(phys$Date))
+phys$year<-as.factor(phys$year)
+phys<-phys%>%
+  mutate(season= ifelse (month %in% c(5,6,7,8,9,10), "summer",
+                         ifelse(month %in% c(11,12,1,2,3,4), "winter", NA))) %>%
+  mutate(period= ifelse(year %in% c(2019) & month %in% c(9,10,11,12), "A",
+                         ifelse(year %in% c(2019) & month %in% c(5,6,7,8), "A",
+                                 ifelse(year %in% c(2020) & month %in% c(1,2,3,4), "A",
+                                 ifelse(year %in% c(2020) & month %in% c(5,6,7,8,9,10,11,12), "B",
+                                 ifelse(year %in% c(2021) & month %in% c(1,2,3,4), "B",
+                                 ifelse(year %in% c(2021) & month %in% c(5,6,7,8,9,10,11,12),"C",
+                                 ifelse(year %in% c(2022) & month %in% c(1,2,3,4), "C",NA))))))))
+phys
+```
+```{r}
+#phys<-filter(phys, Period == c("Recovery"))
+#phys
+```
+
+```{r}
+unique(phys$Period)
+```
+
+```{r}
+colnames(phys)
+```
+
+```{r}
+library(vegan)
+phys.rda<- rda(phys[,(7:13)], na.rm=TRUE, scale=TRUE)#include only columns here that are benthic categories (e.g, CCA, macroalgae, Porites)
+```
+
+```{r}
+biplot(phys.rda, scaling=1, main='Scaling')
+```
+
+```{r}
+pca.sites.scores<- as.data.frame(scores(phys.rda, display='sites'))
+pca.sites.scores<- data.frame(pca.sites.scores, phys)
+pca.species.scores<- as.data.frame(scores(phys.rda, display='species'))
+pca.species.scores$Species<- rownames(pca.species.scores)
+pca.species.scores
+```
+```{r}
+include_list<- c("Protein_mg.cm.2","Sym.density_10.6cells.cm.2","Chl.a_ug.cm2", "pg.Chl.a.per.zoox", "AFDW_mg.cm.2", "CaCO3.Density_g.mL.1") #List of vectors to inclue on the below plot
+pca.species.scores<-pca.species.scores[include_list,]
+```
+
+```{r}
+g<-ggplot()+
+  geom_point(data=pca.sites.scores, aes(y=PC2, x=PC1, color=Months, shape=Bleach), size=3, alpha=0.8)+
+  facet_wrap(~Coral)+
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") + 
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") +
+  geom_segment(data=pca.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3, 'lines')),color='black', linetype='solid',alpha=0.9)+
+  geom_text(data=pca.species.scores, aes(y=PC2, x=PC1, label=Species), color="black")+
+  scale_color_brewer(palette = "RdYlBu")+
+  #scale_color_manual("Year", values=c("2019"='coral2',"2020"='paleturquoise2',"2021"='darkslategray4'))+ #Manually choose the colors   
+  scale_shape_manual("Bleach", values=c("Bleach"=(pch=8),"Non-bleach"=(pch=16)))+ #Manually choose the colors
+  scale_x_continuous(limits=c(-3,3),paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100 * eig[1]/sum(eig))))+
+  scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100 * eig[2]/sum(eig))))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+g
+```
+```{r}
+library(cowplot)
+pcaillustrator<-cowplot::plot_grid(g,g,g, nrow=3, align="h", axis = "bt")
+pcaillustrator
+```
+
+```{r}
+eig<-eigenvals(phys.rda)
+eig
+```
+```{r}
+veg.hull= pca.sites.scores %>% group_by(Months) %>%
+  do({
+    x=.
+    x[chull(x$PC1, x$PC2),]
+  })
+```
+
+```{r}
+g+ geom_polygon(data=veg.hull, aes(y=PC2, x=PC1,fill=Months), alpha=0.2)+
+  scale_fill_brewer(palette = "RdYlBu")
+```
+
+###MDS Montipora only
+```{r}
+mdsmon<-dplyr::filter(phys, Coral== c("Montipora capitata"))
+colnames(mdsmon)
+#row.has.na <- apply(mdsbefore[,(8:17)], 1, function(x){any(is.na(x))})
+#mdsbefore.filtered <- mdsbefore[!row.has.na,]
+#mdsbefore.filtered
+```
+```{r}
+library(vegan)
+phys.rda<- rda(mdsmon[,(7:13)], na.rm=TRUE, scale=TRUE)#include only columns here that are benthic categories (e.g, CCA, macroalgae, Porites)
+```
+
+```{r}
+biplot(phys.rda, scaling=1, main='Scaling')
+```
+
+```{r}
+pca.sites.scores<- as.data.frame(scores(phys.rda, display='sites'))
+pca.sites.scores<- data.frame(pca.sites.scores, mdsmon)
+pca.species.scores<- as.data.frame(scores(phys.rda, display='species'))
+pca.species.scores$Species<- rownames(pca.species.scores)
+pca.species.scores
+```
+```{r}
+include_list<- c("Protein_mg.cm.2","Sym.density_10.6cells.cm.2","Chl.a_ug.cm2", "pg.Chl.a.per.zoox", "AFDW_mg.cm.2", "CaCO3.Density_g.mL.1") #List of vectors to inclue on the below plot
+pca.species.scores<-pca.species.scores[include_list,]
+```
+
+```{r}
+gmon<-ggplot()+
+  geom_point(data=pca.sites.scores, aes(y=PC2, x=PC1, color=Months, shape=Bleach), size=3, alpha=0.8)+
+  facet_wrap(~Coral)+
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") + 
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") +
+  geom_segment(data=pca.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3, 'lines')),color='black', linetype='solid',alpha=0.9)+
+  geom_text(data=pca.species.scores, aes(y=PC2, x=PC1, label=Species), color="black")+
+  scale_color_brewer(palette = "RdYlBu")+
+  #scale_color_manual("Year", values=c("2019"='coral2',"2020"='paleturquoise2',"2021"='darkslategray4'))+ #Manually choose the colors   
+  scale_shape_manual("Bleach", values=c("Bleach"=(pch=8),"Non-bleach"=(pch=16)))+ #Manually choose the colors
+  scale_x_continuous(limits=c(-3,3),paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100 * eig[1]/sum(eig))))+
+  scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100 * eig[2]/sum(eig))))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+gmon
+```
+
+```{r}
+gmonseason<-ggplot()+
+  geom_point(data=pca.sites.scores, aes(y=PC2, x=PC1, color=season, shape=Bleach), size=3, alpha=0.8)+
+  facet_wrap(~Coral)+
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") + 
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") +
+  geom_segment(data=pca.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3, 'lines')),color='black', linetype='solid',alpha=0.9)+
+  geom_text(data=pca.species.scores, aes(y=PC2, x=PC1, label=Species), color="black")+
+  #scale_color_brewer(palette = "RdYlBu")+
+  scale_color_manual("season", values=c("summer"='indianred3', "winter"= "navyblue","NA"="white"))+
+  #scale_color_manual("Year", values=c("2019"='coral2',"2020"='paleturquoise2',"2021"='darkslategray4'))+ #Manually choose the colors   
+  scale_shape_manual("Bleach", values=c("Bleach"=(pch=8),"Non-bleach"=(pch=16)))+ #Manually choose the colors
+  scale_x_continuous(limits=c(-3,3),paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100 * eig[1]/sum(eig))))+
+  scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100 * eig[2]/sum(eig))))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+gmonseason
+```
+
+```{r}
+library(cowplot)
+pcaillustrator<-cowplot::plot_grid(gmon,gpor,gmonseason, gporseason, nrow=2, align="h", axis = "bt")
+pcaillustrator
+```
+
+```{r}
+eig<-eigenvals(phys.rda)
+eig
+```
+```{r}
+veg.hull= pca.sites.scores %>% group_by(Months) %>%
+  do({
+    x=.
+    x[chull(x$PC1, x$PC2),]
+  })
+```
+
+###MDS Porites only
+```{r}
+mdspor<-dplyr::filter(phys, Coral== c("Porites compressa"))
+colnames(mdspor)
+#row.has.na <- apply(mdsbefore[,(8:17)], 1, function(x){any(is.na(x))})
+#mdsbefore.filtered <- mdsbefore[!row.has.na,]
+#mdsbefore.filtered
+```
+```{r}
+library(vegan)
+phys.rda<- rda(mdspor[,(7:13)], na.rm=TRUE, scale=TRUE)#include only columns here that are benthic categories (e.g, CCA, macroalgae, Porites)
+```
+
+```{r}
+biplot(phys.rda, scaling=1, main='Scaling')
+```
+
+```{r}
+pca.sites.scores<- as.data.frame(scores(phys.rda, display='sites'))
+pca.sites.scores<- data.frame(pca.sites.scores, mdspor)
+pca.species.scores<- as.data.frame(scores(phys.rda, display='species'))
+pca.species.scores$Species<- rownames(pca.species.scores)
+pca.species.scores
+```
+```{r}
+include_list<- c("Protein_mg.cm.2","Sym.density_10.6cells.cm.2","Chl.a_ug.cm2", "pg.Chl.a.per.zoox", "AFDW_mg.cm.2", "CaCO3.Density_g.mL.1") #List of vectors to inclue on the below plot
+pca.species.scores<-pca.species.scores[include_list,]
+```
+
+```{r}
+eig<-eigenvals(phys.rda)
+eig
+```
+
+```{r}
+gpor<-ggplot()+
+  geom_point(data=pca.sites.scores, aes(y=PC2, x=PC1, color=Months, shape=Bleach), size=3, alpha=0.8)+
+  facet_wrap(~Coral)+
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") + 
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") +
+  geom_segment(data=pca.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3, 'lines')),color='black', linetype='solid',alpha=0.9)+
+  geom_text(data=pca.species.scores, aes(y=PC2, x=PC1, label=Species), color="black")+
+  scale_color_brewer(palette = "RdYlBu")+
+  #scale_color_manual("Year", values=c("2019"='coral2',"2020"='paleturquoise2',"2021"='darkslategray4'))+ #Manually choose the colors   
+  scale_shape_manual("Bleach", values=c("Bleach"=(pch=8),"Non-bleach"=(pch=16)))+ #Manually choose the colors
+  scale_x_continuous(limits=c(-3,3),paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100 * eig[1]/sum(eig))))+
+  scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100 * eig[2]/sum(eig))))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+gpor
+```
+```{r}
+gporseason<-ggplot()+
+  geom_point(data=pca.sites.scores, aes(y=PC2, x=PC1, color=season, shape=Bleach), size=3, alpha=0.8)+
+  facet_wrap(~Coral)+
+  geom_hline(yintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") + 
+  geom_vline(xintercept = 0, linetype = 2, alpha = 0.8, color = "darkgray") +
+  geom_segment(data=pca.species.scores, aes(y=0, x=0, yend=PC2, xend=PC1), arrow=arrow(length=unit(0.3, 'lines')),color='black', linetype='solid',alpha=0.9)+
+  geom_text(data=pca.species.scores, aes(y=PC2, x=PC1, label=Species), color="black")+
+  #scale_color_brewer(palette = "RdYlBu")+
+  scale_color_manual("season", values=c("summer"='indianred3', "winter"= "navyblue","NA"="white"))+
+  #scale_color_manual("Year", values=c("2019"='coral2',"2020"='paleturquoise2',"2021"='darkslategray4'))+ #Manually choose the colors   
+  scale_shape_manual("Bleach", values=c("Bleach"=(pch=8),"Non-bleach"=(pch=16)))+ #Manually choose the colors
+  scale_x_continuous(limits=c(-3,3),paste(names(eig[1]), sprintf('(%0.1f%% explained var.)', 100 * eig[1]/sum(eig))))+
+  scale_y_continuous(paste(names(eig[2]), sprintf('(%0.1f%% explained var.)', 100 * eig[2]/sum(eig))))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+gporseason
+```
+
+
+
+
+```{r}
+permanova_por<-adonis(mdspor[,(7:13)] ~ Bleach*Months, data=mdspor, permutations=9999)
+permanova_por
+library(pairwiseAdonis)
+pairwise.adonis2(mdspor[,(7:13)] ~Months, data=mdspor, permutations = 9999, na.rm=T)
+```
+
+```{r}
+library(cowplot)
+pcaillustrator<-cowplot::plot_grid(gmon,gpor,g, nrow=3,ncol=2, align="h", axis = "bt")
+pcaillustrator
+```
+
+#STHS
+##Temperature data
+```{r}
+amb<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/STHS temperature profiles/AMB_21257937.csv")
+mild<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/STHS temperature profiles/3C_21257935.csv")
+mod<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/STHS temperature profiles/6C_21257936.csv")
+ex<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/STHS temperature profiles/9C_20473299.csv")
+amb<- plyr::rename(amb, c("ï..Date"="Date"))
+amb$Date<-as.Date(amb$Date)
+amb$Treatment<-as.factor(amb$Treatment)
+amb
+mild<- plyr::rename(mild, c("ï..Date"="Date"))
+mild$Date<-as.Date(mild$Date)
+mild$Treatment<-as.factor(mild$Treatment)
+mild
+mod<- plyr::rename(mod, c("ï..Date"="Date"))
+mod$Date<-as.Date(mod$Date)
+mod$Treatment<-as.factor(mod$Treatment)
+mod
+ex<- plyr::rename(ex, c("ï..Date"="Date"))
+ex$Date<-as.Date(ex$Date)
+ex$Treatment<-as.factor(ex$Treatment)
+ex
+```
+
+```{r}
+alltemp<- merge(amb, mild, by=c("Date","Time","Temperature","Treatment"), all=T)
+alltemp<- merge(alltemp, mod, by=c("Date","Time","Temperature","Treatment"), all=T)
+alltemp<- merge(alltemp, ex, by=c("Date","Time","Temperature","Treatment"), all=T)
+alltemp$Date_Time<- as.POSIXct(paste(alltemp$Date, alltemp$Time), "%Y-%m-%d hh:mm:ss")
+alltemp$Treatment<-as.factor(alltemp$Treatment)
+alltemp$hour <- as.POSIXlt(alltemp$Date_Time)$hour
+alltemp
+unique(alltemp$hour)
+```
+```{r}
+#write.csv(alltemp, "Short-term heat stress temperature data.csv")
+```
+
+
+```{r}
+tempsub<-filter(alltemp, Date == c("2022-09-01", "2022-09-02","2022-09-03"))
+tempsub
+```
+
+```{r}
+tempsub_mean<-summarySE(tempsub, measurevar='Temperature', na.rm=TRUE, conf.interval = 0.95)
+tempsub_mean
+```
+
+```{r}
+alltemp_mean<-summarySE(alltemp, measurevar='Temperature', groupvars=c('Treatment', "Date", "hour"), na.rm=TRUE, conf.interval = 0.95)
+alltemp_mean
+```
+
+
+
+
+```{r}
+sths.lm<- lm(Temperature~Treatment, data=alltemp_mean) #Gaussian
+car::Anova(sths.lm)
+tukey3<- emmeans(sths.lm, list(pairwise ~ Treatment), adjust = "tukey")
+tukey3
+par(mfrow=c(2,3))
+plot(sths.lm, ask=FALSE, which=1:6)
+```
+
+
+
+```{r}
+lims <- as.POSIXct(strptime(c("2022-09-04 00:00", "2022-09-05 0:00"), 
+                   format = "%Y-%m-%d %H:%M"))
+alltemp$Date<- as.Date(as.POSIXct(alltemp$Date, origin="1970-01-01"))
+STHS_hobo_temp<-ggplot(alltemp, aes(y=Temperature, x=Date_Time, color=Treatment))+
+  geom_line(size=1)+
+  #geom_hline(yintercept = 27.7, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.7, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_datetime(labels = date_format("%H:%M"), breaks = date_breaks("3 hours"),limits=lims,  expand=c(0.015,0.015))+
+  scale_y_continuous(expression(Temperature~(degree~C)))+
+  scale_color_brewer(palette ="RdBu", direction =-1)+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_text(),
+        legend.position=c(0.89,0.80),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+STHS_hobo_temp
+```
+```{r}
+tempfigs<-cowplot::plot_grid(STHS_hobo_temp, STHS_hobo_temp,STHS_hobo_temp, STHS_hobo_temp, nrow = 2, ncol = 2)
+tempfigs
+```
+
+##PAM
+```{r}
+pam<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/PAM data for STHS.csv")
+pam$Treatment<- as.factor(pam$Treatment)
+pam$Bleach<-as.factor(pam$Bleach)
+#pam$Months<-as.factor(pam$Months)
+pam$Species<-as.factor(pam$Species)
+pam$Colony.ID<-as.factor(pam$Colony.ID)
+pam$Rep<-as.factor(pam$Rep)
+pam$Temperature<- as.numeric(pam$Temperature)
+pam
+```
+```{r}
+library(Rmisc)
+allpamsum<-summarySE(pam, measurevar='Y', groupvars=c('Treatment',"Temperature",'Species','Bleach',"Colony.ID"), na.rm=TRUE, conf.interval = 0.95)
+allpamsum
+```
+
+
+###Normality
+```{r}
+hist(allpamsum$Y)
+```
+
+```{r}
+sths.lm<- lm(Y~Treatment*Species*Bleach, data=allpamsum) #Gaussian
+par(mfrow=c(2,3))
+plot(sths.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+Y.lme <- lme(Y~Treatment*Species*Bleach, random = ~1|Colony.ID, data=allpamsum, na.action=na.exclude)
+car::Anova(Y.lme, type=3)
+tukey3<- emmeans(Y.lme, list(pairwise ~ Treatment:Species), adjust = "tukey", simple="Species")
+tukey3
+tukey2<- emmeans(Y.lme, list(pairwise ~ Treatment:Bleach), adjust = "tukey", simple="Bleach")
+tukey2
+```
+
+```{r}
+summary(Y.lme)
+r.squaredGLMM(Y.lme)
+```
+####Coefficients
+```{r}
+coef(Y.lme)
+```
+
+```{r}
+allpamsum2<-summarySE(pam, measurevar='Y', groupvars=c('Treatment',"Temperature",'Species','Bleach'), na.rm=TRUE, conf.interval = 0.95)
+allpamsum2
+```
+###Figure
+```{r}
+allpamsum$Treatment <- factor(allpamsum$Treatment, levels=c("AMB","3C","6C","9C"))
+allpamsum$Temperature<- factor(allpamsum$Temperature, levels =c("27.7","30.7","33.7","36.7"))
+allpamsum$Bleach<- factor(allpamsum$Bleach, levels =c("Non-bleach","Bleach"))
+allpamsum2$Treatment <- factor(allpamsum2$Treatment, levels=c("AMB","3C","6C","9C"))
+allpamsum2$Temperature<- factor(allpamsum2$Temperature, levels =c("27.7","30.7","33.7","36.7"))
+allpamsum2$Bleach<- factor(allpamsum2$Bleach, levels =c("Non-bleach","Bleach"))
+pamfig<-ggplot(allpamsum2, aes(y=Y, x=Treatment, color=Bleach))+ 
+  geom_point(data=allpamsum, aes(y=Y,x=Treatment, color=Bleach),alpha=0.5,position=position_jitterdodge(0.05))+
+  geom_path(aes(stat="identity"), position=position_dodge(0.5))+
+  facet_wrap(~Species, nrow=1)+
+  geom_point(size=1, position=position_dodge(0.5),stat="identity")+
+  geom_errorbar(aes(ymin=Y-se, ymax=Y+se, width= 0.5),  position=position_dodge(0.5),stat="identity") +
+  scale_y_continuous(expression(Photosynthetic~efficiency~(Fv/Fm)), limits=c(0,0.75), breaks=c(0,0.25,0.50,0.75))+  
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12, face="italic"))
+pamfig
+```
+```{r}
+ed50m<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Montipora ed50.csv")
+ed50m$Bleach<-as.factor(ed50m$Bleach)
+ed50m
+```
+
+```{r}
+ed50p<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Porites ed50.csv")
+ed50p$Bleach<-as.factor(ed50p$Bleach)
+ed50p
+```
+
+```{r}
+allpamsumporites<-filter(allpamsum, Species == "Porites compressa")
+allpamsummontipora<-filter(allpamsum, Species == "Montipora capitata")
+```
+
+#Porites DRM model
+```{r}
+library(drc) #if not working, ensure temperature is numeric
+sths.drc.por <- drm(Y~Temperature, fct=LL.3(),
+                          data = allpamsumporites,
+                          curveid = Bleach)
+sths.drc.por2 <- drm(Y~Temperature, fct=L.3(),
+                          data = allpamsumporites,
+                          curveid = Bleach)
+summary(sths.drc.por)# run model.
+plot(sths.drc.por)
+ed50<-ED(sths.drc.por, 50, interval="delta")
+ed50
+```
+
+
+```{r}
+AICc(sths.drc.por, sths.drc.por2)
+```
+
+```{r}
+##Create predictions data frame
+newdata = with(allpamsumporites, 
+                       expand.grid(Bleach = levels(Bleach),
+                                 Temperature=seq(min(Temperature, na.rm=TRUE), max(Temperature, na.rm=TRUE)+ 1, 0.1)))
+pred<- as.data.frame(predict(sths.drc.por, newdata=newdata, interval = "confidence", level=0.95))
+#newdata = data.frame(newdata, fvfm = newdata$Prediction, Lower = newdata$Lower, Upper = newdata$Upper)
+pred$Bleach = newdata$Bleach
+pred$Temperature = newdata$Temperature
+pred.average = pred %>% 
+  group_by(Bleach,Temperature) %>% 
+  summarise_all(.funs=mean)
+pred.average
+```
+
+```{r}
+pam.fig.por<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+
+  annotate("rect",xmin=36.94588, xmax=37.41424, ymin=-Inf, ymax=Inf,fill ="#DFD3B9", alpha = 0.2)+
+  annotate("rect", xmin=37.01656, xmax=37.53534,ymin=-Inf, ymax=Inf,  fill= "#796334",  alpha = 0.1) +
+  geom_line(size=1)+
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.4, show.legend = FALSE) +
+  geom_point(data=allpamsumporites, aes(y=Y, x=Temperature, color=Bleach),alpha=0.7,position=position_jitterdodge(0.05))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  scale_y_continuous(expression(Photosynthetic~efficiency~(Fv/Fm)), limits=c(0,0.75), breaks=c(0,0.25,0.5,0.75))+  
+  geom_vline(xintercept = 37.180062, linetype = 2, size=1, alpha = 0.8, color = "#DFD3B9") +
+  geom_vline(xintercept = 37.27595, linetype = 2, size=1,alpha = 0.8, color = "#796334") +
+  #geom_point(data = ed50p, aes(y=Estimate, x = ed50,color=Bleach,fill=Bleach),size=4, shape=17)+
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+pam.fig.por
+```
+
+
+
+
+```{r}
+library(drc)
+sths.drc.mon <- drm(Y~Temperature, fct=LL.3(),
+                          data = allpamsummontipora,
+                          curveid = Bleach)
+summary(sths.drc.mon)# run model.
+plot(sths.drc.mon)
+ed50<-ED(sths.drc.mon, 50, interval="delta")
+ed50
+```
+```{r}
+##Create predictions data frame
+newdata = with(allpamsummontipora, 
+                      expand.grid(Bleach = levels(Bleach),
+                                 Temperature=seq(min(Temperature, na.rm=TRUE), max(Temperature, na.rm=TRUE)+ 1, 0.1)))
+pred<- as.data.frame(predict(sths.drc.mon, newdata=newdata, interval = "confidence", level=0.95))
+#newdata = data.frame(newdata, fvfm = newdata$Prediction, Lower = newdata$Lower, Upper = newdata$Upper)
+pred$Bleach = newdata$Bleach
+pred$Temperature = newdata$Temperature
+pred.average = pred %>% 
+  group_by(Bleach,Temperature) %>% 
+  summarise_all(.funs=mean)
+pred.average
+```
+```{r}
+pam.fig.mon<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+ 
+  annotate("rect",xmin=35.92488, xmax=36.27658, ymin=-Inf, ymax=Inf,fill ="#DFD3B9", alpha = 0.2)+
+  annotate("rect", xmin=36.47089, xmax=36.74191,ymin=-Inf, ymax=Inf,  fill= "#796334",  alpha = 0.1) +
+  geom_line(size=1)+
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.4, show.legend = FALSE) +
+  geom_point(data=allpamsummontipora, aes(y=Y, x=Temperature, color=Bleach),alpha=0.7,position=position_jitterdodge(0.05))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  scale_y_continuous(expression(Photosynthetic~efficiency~(Fv/Fm)), limits=c(0,0.75), breaks=c(0,0.25,0.5,0.75))+ 
+  geom_vline(xintercept = 36.100733, linetype = 2, size=1, alpha = 0.8, color = "#DFD3B9") +
+  geom_vline(xintercept = 36.606397, linetype = 2, size=1,alpha = 0.8, color = "#796334") +
+  #geom_point(data = ed50m, aes(y=Estimate, x = ed50,color=Bleach,fill=Bleach),size=4, shape=17)+
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.2),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+pam.fig.mon
+```
+
+```{r}
+pamfig2<-ggplot(allpamsum, aes(y=Y, x=Temperature, color=Bleach, fill=Bleach))+ 
+  geom_point(alpha=0.5)+
+  geom_smooth(method=drm, method.args=list(fct=L.3()), se=F)+
+  facet_grid(~Species)+
+  #scale_x_date(date_breaks = "4 months", date_labels = "%b %y")+ 
+  #scale_y_continuous(expression(Chlorophyll~italic(a)~(mu~g~'\U2219'~cm^{-2})))+
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_y_continuous(expression(Photosynthetic~efficiency~(Fv/Fm)), limits=c(0,0.8), breaks=c(0,0.25,0.50,0.75))+ 
+  #geom_hline(yintercept=0.4)+
+  geom_vline(xintercept =c(36.23238), linetype='solid', size=1, color='#DFD3B9')+
+  geom_vline(xintercept =c(37.08728), linetype='dashed', size=1, color='#DFD3B9')+
+  geom_vline(xintercept =c(36.622434), linetype='solid', size=1, color='#796334')+
+  geom_vline(xintercept =c(37.185249), linetype='dashed', size=1, color='#796334')+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.12,0.15),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(size=12, face="italic"))
+pamfig2
+```
+
+
+```{r}
+pamfigs<-cowplot::plot_grid(pamfig2, pamfig2, nrow = 2, ncol = 1)
+pamfigs
+```
+
+##Color score
+```{r}
+color<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Color score data STHS.csv")
+color$Treatment<- as.factor(color$Treatment)
+color$Bleach<-as.factor(color$Bleach)
+#color$Months<-as.factor(color$Months)
+color$Species<-as.factor(color$Species)
+color$Colony.ID<-as.factor(color$Colony.ID)
+#color$Rep<-as.factor(color$Rep)
+color
+```
+
+###Normality
+```{r}
+hist(color$Color_avg)
+```
+
+```{r}
+sthsc.lm<- lm(Color_avg~Treatment*Species*Bleach, data=color) #Gaussian
+par(mfrow=c(2,3))
+plot(sthsc.lm, ask=FALSE, which=1:6)
+```
+###Stats
+```{r}
+color.lme <- lme(Color_avg~Treatment*Species*Bleach, random = ~1|Colony.ID, data=color, na.action=na.exclude)
+car::Anova(color.lme, type=3)
+tukey3<- emmeans(color.lme, list(pairwise ~ Species:Bleach), adjust = "tukey", simple="Bleach")
+tukey3
+tukey2<- emmeans(color.lme, list(pairwise ~ Treatment), adjust = "tukey")
+tukey2
+```
+```{r}
+summary(color.lme)
+r.squaredGLMM(color.lme)
+```
+####Coefficients
+```{r}
+coef(color.lme)
+```
+
+```{r}
+allcolorsumporites<-filter(color, Species == "Porites compressa")
+allcolorsumporites
+allcolorsummontipora<-filter(color, Species == "Montipora capitata")
+allcolorsummontipora
+```
+
+#Porites DRM model
+```{r}
+library(drc)
+sths.drc.por <- drm(Color_avg~Temperature, fct=LL.3(),
+                          data = allcolorsumporites,
+                          curveid = Bleach)
+sths.drc.por2 <- drm(Color_avg~Temperature, fct=L.3(),
+                          data = allcolorsumporites,
+                          curveid = Bleach)
+summary(sths.drc.por)# run model.
+plot(sths.drc.por)
+ed50<-ED(sths.drc.por, 50, interval="delta")
+ed50
+```
+
+
+```{r}
+AICc(sths.drc.por, sths.drc.por2)
+```
+
+```{r}
+##Create predictions data frame
+newdata = with(allcolorsumporites, 
+                       expand.grid(Bleach = levels(Bleach),
+                                 Temperature=seq(min(Temperature, na.rm=TRUE), max(Temperature, na.rm=TRUE)+ 1, 0.1)))
+pred<- as.data.frame(predict(sths.drc.por, newdata=newdata, interval = "confidence", level=0.95))
+#newdata = data.frame(newdata, fvfm = newdata$Prediction, Lower = newdata$Lower, Upper = newdata$Upper)
+pred$Bleach = newdata$Bleach
+pred$Temperature = newdata$Temperature
+pred.average = pred %>% 
+  group_by(Bleach,Temperature) %>% 
+  summarise_all(.funs=mean)
+pred.average
+```
+```{r}
+ed50p<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Porites ed50 color.csv")
+ed50p$Bleach<-as.factor(ed50m$Bleach)
+ed50p
+```
+
+```{r}
+color.fig.por<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+
+  annotate("rect",xmin=33.8304, xmax=34.93152, ymin=-Inf, ymax=Inf,fill ="#DFD3B9", alpha = 0.2)+
+  annotate("rect", xmin=34.45524, xmax=34.7909, ymin=-Inf, ymax=Inf,  fill= "#796334",  alpha = 0.1) +
+  geom_line(size=1)+
+  geom_point(data=allcolorsumporites, aes(y=Color_avg, x=Temperature, color=Bleach),alpha=0.3,position=position_jitterdodge(0.05))+
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.5, show.legend = FALSE) +
+  #geom_segment(data = ed50p, aes(y=Estimate,yend=-0.1, xend=ed50, x = ed50, color=Bleach),linetype = 1, size = 1.5)+
+  #geom_point(data = ed50p, aes(y=Estimate, x = ed50),size=3)+
+  #geom_point(size=1, position=position_dodge(0.5),stat="identity")+
+  #geom_errorbar(aes(ymin=Prediction-Lower, ymax=Prediction+Upper, width= 0.5),  position=position_dodge(0.5),stat="identity") +
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  #scale_y_continuous(expression(Color~score),limits=c(-.25,1.1), breaks=c(-0.25,0,.25,.5,.75,1.0))+  
+  geom_vline(xintercept = 34.62307, linetype = 2, size=1, alpha = 0.8, color = "#DFD3B9") +
+  geom_vline(xintercept = 34.38096, linetype = 2, size=1,alpha = 0.8, color = "#796334") +
+  #geom_point(data = ed50p, aes(y=Estimate, x = ed50,color=Bleach,fill=Bleach),size=4, shape=17)+
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+color.fig.por
+```
+```{r}
+color.fig.por2<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+ 
+  geom_line(size=1)+
+  #geom_segment(data = ed50p, aes(y=Estimate,yend=0, xend=ed50, x = ed50, color=Bleach),linetype = 1, size = .5)+
+  #geom_point(data = ed50p, aes(y=Estimate, x = ed50),size=1)+
+  geom_point(data=allcolorsumporites, aes(y=Color_avg, x=Temperature, color=Bleach),alpha=0.3,position=position_jitterdodge(0.05))+
+  #geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.5, show.legend = FALSE) +
+  #geom_point(size=1, position=position_dodge(0.5),stat="identity")+
+  #geom_errorbar(aes(ymin=Prediction-Lower, ymax=Prediction+Upper, width= 0.5),  position=position_dodge(0.5),stat="identity") +
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  scale_y_continuous(expression(Color~score))+  
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position="none",
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+color.fig.por2
+```
+
+```{r}
+library(drc)
+sths.drc.mon <- drm(Color_avg~Temperature, fct=LL.3(),
+                          data = allcolorsummontipora,
+                          curveid = Bleach)
+summary(sths.drc.mon)# run model.
+plot(sths.drc.mon)
+ed50<-ED(sths.drc.mon, 50, interval="delta")
+ed50
+```
+```{r}
+##Create predictions data frame
+newdata = with(allcolorsummontipora, 
+                      expand.grid(Bleach = levels(Bleach),
+                                 Temperature=seq(min(Temperature, na.rm=TRUE), max(Temperature, na.rm=TRUE)+ 1, 0.1)))
+pred<- as.data.frame(predict(sths.drc.mon, newdata=newdata, interval = "confidence", level=0.95))
+#newdata = data.frame(newdata, fvfm = newdata$Prediction, Lower = newdata$Lower, Upper = newdata$Upper)
+pred$Bleach = newdata$Bleach
+pred$Temperature = newdata$Temperature
+pred.average = pred %>% 
+  group_by(Bleach,Temperature) %>% 
+  summarise_all(.funs=mean)
+pred.average
+```
+
+```{r}
+ed50m<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/Montipora ed50 color.csv")
+ed50m$Bleach<-as.factor(ed50m$Bleach)
+ed50m
+```
+
+
+```{r}
+color.fig.mon<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+ 
+  #geom_segment(data = ed50m, aes(y=Estimate,yend=-.10, xend=ed50, x = ed50, color=Bleach),linetype = 1, size =1.5)+
+  geom_line(size=1)+
+  annotate("rect",xmin=33.78391, xmax=34.65903, ymin=-Inf, ymax=Inf,fill ="#DFD3B9", alpha = 0.2)+
+  annotate("rect", xmin=34.1545, xmax=34.91972, ymin=-Inf, ymax=Inf,  fill= "#796334",  alpha = 0.1) +
+  geom_point(data=allcolorsummontipora, aes(y=Color_avg, x=Temperature, color=Bleach),alpha=0.3,position=position_jitterdodge(0.05))+
+  geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.5, show.legend = FALSE) +
+  #geom_point(size=1, position=position_dodge(0.5),stat="identity")+
+  #geom_errorbar(aes(ymin=Prediction-Lower, ymax=Prediction+Upper, width= 0.5),  position=position_dodge(0.5),stat="identity") +
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  scale_y_continuous(expression(Color~score),limits=c(-.25,1.1),breaks=c(-0.25,0,.25,.5,.75,1.0))+  
+  geom_vline(xintercept = 34.22147, linetype = 2, size=1, alpha = 0.8, color = "#DFD3B9") +
+  #geom_rect(aes(xmin=33.34961, xmax=35.09332, ymin=Inf, ymax=Inf), alpha = 0.8,color = "#DFD3B9",fill = "#DFD3B9")+
+  geom_vline(xintercept = 34.53711, linetype = 2, size=1,alpha = 0.8, color = "#796334") +
+  #geom_point(data = ed50m, aes(y=Estimate, x = ed50,color=Bleach,fill=Bleach),size=4, shape=17)+
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.2),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+color.fig.mon
+```
+
+```{r}
+color.fig.mon2<-ggplot(pred.average, aes(y=Prediction, x=Temperature, color=Bleach, fill=Bleach))+ 
+  geom_line(size=1)+
+  #geom_segment(data = ed50m, aes(y=Estimate,yend=0, xend=ed50, x = ed50, color=Bleach),linetype = 1, size = 2)+
+  #geom_point(data = ed50m, aes(y=Estimate, x = ed50),size=3)+
+  geom_point(data=allcolorsummontipora, aes(y=Color_avg, x=Temperature, color=Bleach),alpha=0.3,position=position_jitterdodge(0.05))+
+  #geom_ribbon(aes(ymin = Lower, ymax = Upper, fill = Bleach), alpha = 0.5, show.legend = FALSE) +
+  #geom_point(size=1, position=position_dodge(0.5),stat="identity")+
+  #geom_errorbar(aes(ymin=Prediction-Lower, ymax=Prediction+Upper, width= 0.5),  position=position_dodge(0.5),stat="identity") +
+  scale_fill_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+ #Manually choose the colors
+  scale_x_continuous(expression(Temperature~(degree~C)), limits=c(27,38),breaks=c(27,29,31,33,35,37))+
+  scale_y_continuous(expression(Color~score))+  
+  #scale_color_manual("Bleach", values=c("Bleach"= '#DFD3B9',"Non-bleach"='#796334'))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5, size=12),
+        axis.text.y=element_text(vjust=0.5, size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12),
+        legend.text = element_text(vjust=0.5, size=12),
+        legend.position=c(0.15,0.2),
+        panel.background= element_rect(fill=NA, color='black'),
+        strip.text = element_text(vjust=0.5, size=12))
+color.fig.mon2
+```
+
+```{r}
+colorfigs<-cowplot::plot_grid(color.fig.mon, color.fig.por, nrow = 1, ncol = 2)
+colorfigs
+```
+```{r}
+colorfigs2<-cowplot::plot_grid(color.fig.mon2, color.fig.por2, nrow = 1, ncol = 2)
+colorfigs2
+```
+
+```{r}
+hobo2<-cowplot::plot_grid(STHS_hobo_temp,STHS_hobo_temp, nrow = 2, ncol = 1)
+hobo2
+```
+
+
+```{r}
+pamcolorfigsall<-cowplot::plot_grid(pam.fig.mon,pam.fig.por, color.fig.mon, color.fig.por,pam.fig.mon,pam.fig.por, color.fig.mon, color.fig.por,nrow = 4, ncol = 3)
+pamcolorfigsall
+```
+
+```{r}
+pamcolorfigswithtemp<-cowplot::plot_grid(STHS_hobo_temp,pamcolorfigsall,nrow = 1, ncol = 2, rel_widths = c(1,2))
+pamcolorfigswithtemp
+```
