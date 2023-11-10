@@ -1,0 +1,849 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+#Environmental data from Kaneohe Bay, Oahu, Hawaii
+##CRIMP2
+```{r}
+library(dplyr)
+library(tidyr)
+library(Rmisc)
+library(lubridate)
+library(ggplot2)
+library(car)
+library(MASS)
+library(mgcv)
+library(MuMIn)
+library(emmeans)
+```
+###Nov2013_Jun2014
+```{r}
+c1<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Nov2013_Jun2014.csv", strip.white=T)
+c1$Date <- strptime(as.character(c1$Date), "%m/%d/%Y")
+c1$Date <- format(c1$Date, "%Y-%m-%d")
+c1$Date_Time<- as.POSIXct(paste(c1$Date, c1$Time), "%Y-%m-%d hh:mm:ss")
+c1
+```
+###Jun2014_May2015
+```{r}
+c2<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Jun2014_May2015.csv", strip.white=T)
+c2$Date <- strptime(as.character(c2$Date), "%m/%d/%Y")
+c2$Date <- format(c2$Date, "%Y-%m-%d")
+c2$Date_Time<- as.POSIXct(paste(c2$Date, c2$Time), "%Y-%m-%d hh:mm:ss")
+c2
+```
+###Aug2015_Sep2016
+```{r}
+c3<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Aug2015_Sep2016.csv", strip.white=T)
+c3$Date <- strptime(as.character(c3$Date), "%m/%d/%Y")
+c3$Date <- format(c3$Date, "%Y-%m-%d")
+c3$Date_Time<- as.POSIXct(paste(c3$Date, c3$Time), "%Y-%m-%d hh:mm:ss")
+c3
+```
+
+###Nov2016_Dec2017
+```{r}
+c4<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Nov2016_Dec2017.csv", strip.white=T)
+c4$Date <- strptime(as.character(c4$Date), "%m/%d/%Y")
+c4$Date <- format(c4$Date, "%Y-%m-%d")
+c4$Date_Time<- as.POSIXct(paste(c4$Date, c4$Time), "%Y-%m-%d hh:mm:ss")
+c4
+```
+
+###Dec2017_May2018
+```{r}
+c5<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Dec2017_May2018.csv", strip.white=T)
+c5$Date <- strptime(as.character(c5$Date), "%m/%d/%Y")
+c5$Date <- format(c5$Date, "%Y-%m-%d")
+c5$Date_Time<- as.POSIXct(paste(c5$Date, c5$Time), "%Y-%m-%d hh:mm:ss")
+c5
+```
+
+###May2018_Feb2019
+```{r}
+c6<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_May2018_Feb2019.csv", strip.white=T)
+c6$Date <- strptime(as.character(c6$Date), "%m/%d/%Y")
+c6$Date <- format(c6$Date, "%Y-%m-%d")
+c6$Date_Time<- as.POSIXct(paste(c6$Date, c6$Time), "%Y-%m-%d hh:mm:ss")
+c6
+```
+###Feb2019_Mar2020
+```{r}
+c7<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/CRIMP2_158W_21N_Feb2019_Mar2020.csv", strip.white=T)
+c7$Date <- strptime(as.character(c7$Date), "%m/%d/%Y")
+c7$Date <- format(c7$Date, "%Y-%m-%d")
+c7$Date_Time<- as.POSIXct(paste(c7$Date, c7$Time), "%Y-%m-%d hh:mm:ss")
+c7
+```
+
+
+```{r}
+all_crimp<- merge(c1, c2, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- merge(all_crimp, c3, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- merge(all_crimp, c4, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- merge(all_crimp, c5, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- merge(all_crimp, c6, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- merge(all_crimp, c7, by=c("Date_Time","Date","Time","SST..C.","Salinity","pCO2.SW..sat..uatm"), all=T)
+all_crimp<- plyr::rename(all_crimp, c("SST..C."="Temperature", "pCO2.SW..sat..uatm"= "pCO2"))
+all_crimp$Date<- as.Date(all_crimp$Date, format = "%Y-%m-%d")
+all_crimp$hour <- as.POSIXlt(all_crimp$Date_Time)$hour
+all_crimp$day <- day(as.POSIXlt(all_crimp$Date_Time))
+all_crimp$month <- month(as.POSIXlt(all_crimp$Date_Time))
+all_crimp$year <- year(as.POSIXlt(all_crimp$Date_Time))
+all_crimp$Site <-"CRIMP"
+all_crimp <- all_crimp[, -c(7:124)]
+all_crimp
+```
+
+
+##Reef13 
+####from Carlo and Mariana 2019-2021
+
+```{r}
+reef13<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Dep5_2_1.csv", strip.white=T)
+reef13<- plyr::rename(reef13, c("Temp...C..LGR.S.N..20701612..SEN.S.N..20701612."= "Temperature"))
+reef13$Date <- strptime(as.character(reef13$Date), "%d/%m/%y")
+reef13$Date <- format(reef13$Date, "%Y-%m-%d")
+reef13$Date<- as.Date(reef13$Date, format = "%Y-%m-%d")
+reef13<-reef13[!apply(reef13 == "", 1, all),]
+reef13 = reef13 %>% na.omit()
+reef13$Date_Time<- as.POSIXct(paste(reef13$Date, reef13$Time), "%Y-%m-%d hh:mm:ss")
+reef13
+```
+```{r}
+reef13a<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Dep6_2_1.csv", strip.white=T)
+reef13a<- plyr::rename(reef13a, c("X2_1"= "Temperature","Date.Time."="Date", "GMT.10.00"="Time"))
+reef13a$Date <- strptime(as.character(reef13a$Date), "%y/%m/%d")
+reef13a$Date <- format(reef13a$Date, "%Y-%m-%d")
+reef13a$Date<- as.Date(reef13a$Date, format = "%Y-%m-%d")
+reef13a<-reef13a[!apply(reef13a == "", 1, all),]
+reef13a = reef13a %>% na.omit()
+reef13a$Date_Time<- as.POSIXct(paste(reef13a$Date, reef13a$Time), "%Y-%m-%d hh:mm:ss")
+reef13a
+```
+
+```{r}
+reef13b<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Dep_5_2_7.csv", strip.white=T)
+reef13b<- plyr::rename(reef13b, c("Temp..Â.C..LGR.S.N..20701613..SEN.S.N..20701613."= "Temperature"))
+reef13b$Date <- strptime(as.character(reef13b$Date), "%y/%m/%d")
+reef13b$Date <- format(reef13b$Date, "%Y-%m-%d")
+reef13b$Date<- as.Date(reef13b$Date, format = "%Y-%m-%d")
+reef13b<-reef13b[!apply(reef13b == "", 1, all),]
+reef13b = reef13b %>% na.omit()
+reef13b$Date_Time<- as.POSIXct(paste(reef13b$Date, reef13b$Time), "%Y-%m-%d hh:mm:ss")
+reef13b
+```
+```{r}
+reef13c<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Dep6_2_7.csv", strip.white=T)
+reef13c$Date <- strptime(as.character(reef13c$Date), "%y/%m/%d")
+reef13c$Date <- format(reef13c$Date, "%Y-%m-%d")
+reef13c$Date<- as.Date(reef13c$Date, format = "%Y-%m-%d")
+reef13c<-reef13c[!apply(reef13c == "", 1, all),]
+reef13c = reef13c %>% na.omit()
+reef13c$Date_Time<- as.POSIXct(paste(reef13c$Date, reef13c$Time), "%Y-%m-%d hh:mm:ss")
+reef13c
+```
+```{r}
+allreef13<- merge(reef13, reef13a, by=c("Date_Time","Date","Time","Temperature"), all=T)
+allreef13<- merge(allreef13, reef13b, by=c("Date_Time","Date","Time","Temperature"), all=T)
+allreef13<- merge(allreef13, reef13c, by=c("Date_Time","Date","Time","Temperature"), all=T)
+allreef13 <- allreef13[, -c(5:13)]
+allreef13
+```
+
+```{r}
+library(lubridate)
+allreef13$hour <- as.POSIXlt(allreef13$Date_Time)$hour
+allreef13$day <- day(as.POSIXlt(allreef13$Date_Time))
+allreef13$month <- month(as.POSIXlt(allreef13$Date_Time))
+allreef13$year <- year(as.POSIXlt(allreef13$Date_Time))
+```
+
+```{r}
+allreef13_Q3<-allreef13%>%
+  group_by(Date)%>%
+  summarize_at(vars(Temperature), funs(Q3 = quantile), probs = 0.975,na.rm=T)
+allreef13_Q1<-allreef13%>%
+  group_by(Date)%>%
+  summarize_at(vars(Temperature), funs(Q1 = quantile), probs = 0.025,na.rm=T)
+allreef13_2<-inner_join(allreef13,allreef13_Q3)
+allreef13_2<-inner_join(allreef13_2,allreef13_Q1)
+allreef13_2<- allreef13_2 %>%
+  mutate(Temperature=ifelse(Temperature < Q1 | Temperature >Q3| Temperature <18.0,NA,Temperature))
+allreef13_2$Site<- "Reef13"
+allreef13_2
+```
+
+```{r}
+reef13$Date<- as.Date(as.POSIXct(reef13$Date, origin="1970-01-01"))
+tempfigreef13<-ggplot(allreef13_2, aes(y=Temperature, x=Date, color=Temperature))+
+  geom_point(size=1)+
+  #geom_line(data=crimpandhimbmean, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  scale_color_gradientn(colours=c("#053061","#2166ac",
+"#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 28, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 29, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_date(date_breaks = "3 months", date_labels = "%b %Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfigreef13
+```
+
+####from Matsuda et al 2020
+```{r}
+pr4_13<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Temp_Data_PR4_PR13.csv", strip.white=T)
+pr4_13$Date <- strptime(as.character(pr4_13$Date), "%m/%d/%y")
+pr4_13$Date <- format(pr4_13$Date, "%Y-%m-%d")
+pr4_13$Date<- as.Date(pr4_13$Date, format = "%Y-%m-%d")
+pr4_13<- plyr::rename(pr4_13, c("IB"="Reef4", "OB"="Reef13"))
+pr4_13$Date_Time<- as.POSIXct(paste(pr4_13$Date, pr4_13$Time), "%Y-%m-%d hh:mm:ss")
+library(tidyr)
+pr4_13.long <- pivot_longer(pr4_13, cols=4:5, names_to = "Site", values_to = "Temperature")
+#pr4_13.long$Depth<-as.factor(n.long$Depth)
+pr4_13.long<-filter(pr4_13.long, Site == "Reef13")
+pr4_13.long
+```
+
+####from Barott et al 2021
+```{r}
+pr4_13_katie<-read.delim("/Users/imkri/Desktop/Penn postdoc/Hawaii/KBay Reef4-13 Seaphox_data_2016-2017.txt",header=TRUE, sep = ',')
+pr4_13_katie<- plyr::rename(pr4_13_katie, c("Temp..Â.C."= "Temperature", "Salinity..ppt."="Salinity"))
+pr4_13_katie$Date<- as.Date(pr4_13_katie$Date, format = "%m/%d/%y")
+#pr4_13_katie$Date <- strptime(as.character(pr4_13_katie$Date), "%m/%d/%y")
+pr4_13_katie$Date <- format(pr4_13_katie$Date, "%Y-%m-%d")
+#pr12$Site<-"Reef12"
+pr4_13_katie$Date_Time<- as.POSIXct(paste(pr4_13_katie$Date, pr4_13_katie$Time), "%Y-%m-%d hh:mm:ss")
+pr4_13_katie<-filter(pr4_13_katie, Site == "Monty 13")
+pr4_13_katie$Site<-as.factor(pr4_13_katie$Site)
+pr4_13_katie<- plyr::rename(pr4_13_katie, c("Site"="Site_Katie"))
+pr4_13_katie$Site<- "Reef13"
+pr4_13_katie
+```
+
+```{r}
+shalyeandkatiereef13only<-merge(pr4_13.long, pr4_13_katie,by=c("Date_Time","Temperature","Date","Time", "Site"), all=T )
+shalyeandkatiereef13only <- shalyeandkatiereef13only[, -c(6:10)]
+shalyeandkatiereef13only
+```
+```{r}
+library(lubridate)
+shalyeandkatiereef13only$hour <- as.POSIXlt(shalyeandkatiereef13only$Date_Time)$hour
+shalyeandkatiereef13only$day <- day(as.POSIXlt(shalyeandkatiereef13only$Date_Time))
+shalyeandkatiereef13only$month <- month(as.POSIXlt(shalyeandkatiereef13only$Date_Time))
+shalyeandkatiereef13only$year <- year(as.POSIXlt(shalyeandkatiereef13only$Date_Time))
+```
+
+###from Ford 2022
+
+```{r}
+ford2022<-read.delim("/Users/imkri/Desktop/Penn postdoc/Hawaii/temps from Ford Reef 13 2022.txt", strip.white=T)
+ford2022$Temperature<-apply(ford2022[,2:3],1, mean)
+ford2022<- plyr::rename(ford2022, c("date_time"= "Date_Time"))
+ford2022$Date <- as.Date(ford2022$Date_Time)
+ford2022$Time <- format(as.POSIXct(ford2022$Date_Time), format = "%H:%M:%S")
+ford2022$hour <- hour(ford2022$Date_Time)
+ford2022$day <- day(as.POSIXlt(ford2022$Date_Time))
+ford2022$month <- month(as.POSIXlt(ford2022$Date_Time))
+ford2022$year <- year(as.POSIXlt(ford2022$Date_Time))
+ford2022$Site<-"Reef13"
+ford2022
+```
+#### from our own sensors in 2022-2023
+
+```{r}
+reef13_ktb<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2022-Sept to 2023-April_Reef 13_1m_21152005.csv", strip.white=T)
+reef13_ktb<- plyr::rename(reef13_ktb, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp..Â.C"= "Temperature"))
+reef13_ktb$Date<- as.Date(reef13_ktb$Date, format = "%Y-%m-%d")
+reef13_ktb$Date_Time<- as.POSIXct(paste(reef13_ktb$Date, reef13_ktb$Time), "%Y-%m-%d hh:mm:ss")
+reef13_ktb
+```
+
+```{r}
+reef13_ktb_1<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2022-Sept to 2023-April_Reef 13_1m_21152007.csv", strip.white=T)
+reef13_ktb_1<- plyr::rename(reef13_ktb_1, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp..Â.C"= "Temperature"))
+reef13_ktb_1$Date<- as.Date(reef13_ktb_1$Date, format = "%Y-%m-%d")
+reef13_ktb_1$Date_Time<- as.POSIXct(paste(reef13_ktb_1$Date, reef13_ktb_1$Time), "%Y-%m-%d hh:mm:ss")
+reef13_ktb_1
+```
+
+```{r}
+reef13_ktb_2<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2022-Sept to 2023-April_Reef 13_3m_21152009.csv", strip.white=T)
+reef13_ktb_2<- plyr::rename(reef13_ktb_2, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp..Â.C"= "Temperature"))
+reef13_ktb_2$Date<- as.Date(reef13_ktb_2$Date, format = "%Y-%m-%d")
+reef13_ktb_2$Date_Time<- as.POSIXct(paste(reef13_ktb_2$Date, reef13_ktb_2$Time), "%Y-%m-%d hh:mm:ss")
+reef13_ktb_2
+```
+
+```{r}
+all_reef13_ktb<- merge(reef13_ktb, reef13_ktb_1, by=c("Date_Time","Temperature","Date","Time"), all=T)
+all_reef13_ktb<- merge(all_reef13_ktb, reef13_ktb_2, by=c("Date_Time","Temperature","Date","Time"), all=T)
+#all_reef13_ktb<- plyr::rename(all_reef13_ktb, c("Temperature"="Temperature_clean"))
+all_reef13_ktb$Site <-"Reef13"
+all_reef13_ktb$hour <- as.POSIXlt(all_reef13_ktb$Date_Time)$hour
+all_reef13_ktb$day <- day(as.POSIXlt(all_reef13_ktb$Date_Time))
+all_reef13_ktb$month <- month(as.POSIXlt(all_reef13_ktb$Date_Time))
+all_reef13_ktb$year <- year(as.POSIXlt(all_reef13_ktb$Date_Time))
+all_reef13_ktb
+```
+
+#### from our own sensors in 2023
+
+```{r}
+reef13_sept_ktb<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2023-04-14 to 2023-09-19_21152007_Reef 13_1m.csv", strip.white=T)
+reef13_sept_ktb<- plyr::rename(reef13_sept_ktb, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp...C"= "Temperature"))
+reef13_sept_ktb$Date<- as.Date(reef13_sept_ktb$Date, format = "%Y-%m-%d")
+reef13_sept_ktb$Date_Time<- as.POSIXct(paste(reef13_sept_ktb$Date, reef13_sept_ktb$Time), "%Y-%m-%d hh:mm:ss")
+reef13_sept_ktb
+```
+
+```{r}
+reef13_sept_ktb_1<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2023-04-14 to 2023-09-19_21152007_Reef 13_1m_2.csv", strip.white=T)
+reef13_sept_ktb_1<- plyr::rename(reef13_sept_ktb_1, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp..Â.C"= "Temperature"))
+reef13_sept_ktb_1$Date<- as.Date(reef13_sept_ktb_1$Date, format = "%Y-%m-%d")
+reef13_sept_ktb_1$Date_Time<- as.POSIXct(paste(reef13_sept_ktb_1$Date, reef13_sept_ktb_1$Time), "%Y-%m-%d hh:mm:ss")
+reef13_sept_ktb_1
+```
+
+```{r}
+reef13_sept_ktb_2<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef 13 In situ temperature data/2023-04-14 to 2023-09-19_21152007_Reef 13_3m.csv", strip.white=T)
+reef13_sept_ktb_2<- plyr::rename(reef13_sept_ktb_2, c("ï..Date"="Date", "Time..GMT.10.00"= "Time", "Temp..Â.C"= "Temperature"))
+reef13_sept_ktb_2$Date<- as.Date(reef13_sept_ktb_2$Date, format = "%Y-%m-%d")
+reef13_sept_ktb_2$Date_Time<- as.POSIXct(paste(reef13_sept_ktb_2$Date, reef13_sept_ktb_2$Time), "%Y-%m-%d hh:mm:ss")
+reef13_sept_ktb_2
+```
+
+```{r}
+all_reef13_sept_ktb<- merge(reef13_sept_ktb, reef13_sept_ktb_1, by=c("Date_Time","Temperature","Date","Time"), all=T)
+all_reef13_sept_ktb<- merge(all_reef13_sept_ktb, reef13_sept_ktb_2, by=c("Date_Time","Temperature","Date","Time"), all=T)
+#all_reef13_sept_ktb<- plyr::rename(all_reef13_sept_ktb, c("Temperature"="Temperature_clean"))
+all_reef13_sept_ktb$Site <-"Reef13"
+all_reef13_sept_ktb$hour <- as.POSIXlt(all_reef13_sept_ktb$Date_Time)$hour
+all_reef13_sept_ktb$day <- day(as.POSIXlt(all_reef13_sept_ktb$Date_Time))
+all_reef13_sept_ktb$month <- month(as.POSIXlt(all_reef13_sept_ktb$Date_Time))
+all_reef13_sept_ktb$year <- year(as.POSIXlt(all_reef13_sept_ktb$Date_Time))
+all_reef13_sept_ktb
+```
+
+
+##Reef12 from DAR included in Matsuda et al 2020
+
+```{r}
+pr12<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Environmental data/Temp_Data_PR12_Matsuda et al 2020.csv", strip.white=T)
+# Convert date column to POSIXlt format
+pr12$Date <- parse_date_time(pr12$Date, orders = c("mdy", "mdY"))
+# Reformat the dates to 'yyyy-mm-dd' format
+pr12$Date <- format(pr12$Date, "%Y-%m-%d")
+pr12<- plyr::rename(pr12, c("Time"="Time12", "Time24"="Time", "Corrected.Temp.C"= "Temperature"))
+pr12$Site<-"Reef12"
+pr12$Date_Time<- as.POSIXct(paste(pr12$Date, pr12$Time), "%Y-%m-%d hh:mm:ss")
+pr12$hour <- as.POSIXlt(pr12$Date_Time)$hour
+pr12$day <- day(as.POSIXlt(pr12$Date_Time))
+pr12$month <- month(as.POSIXlt(pr12$Date_Time))
+pr12$year <- year(as.POSIXlt(pr12$Date_Time))
+pr12
+```
+
+```{r}
+unique(pr12$Date)
+```
+
+
+##ALL TEMPERATURE
+###Temperature
+```{r}
+crimpreef13<- merge(all_crimp, allreef13_2, by=c("Date_Time","Temperature","Date","Time", "hour", "year", "Site", "day", "month"), all=T)
+crimpreef13<- merge(crimpreef13, all_reef13_ktb, by=c("Date_Time","Temperature","Date","Time", "hour", "year", "Site", "day", "month"), all=T)
+crimpreef13<- merge(crimpreef13, all_reef13_sept_ktb, by=c("Date_Time","Temperature","Date","Time", "hour", "year", "Site", "day", "month"), all=T)
+crimpreef13<- merge(crimpreef13, ford2022, by=c("Date_Time","Temperature","Date","Time", "hour", "year", "Site", "day", "month"), all=T)
+crimpreef13<-merge(crimpreef13, shalyeandkatiereef13only,by=c("Date_Time","Temperature","Date","Time", "Site","hour", "year", "day", "month"), all=T )
+crimpreef13<-merge(crimpreef13, pr12,by=c("Date_Time","Temperature","Date","Time", "Site","hour", "year", "day", "month"), all=T )
+crimpreef13<- plyr::rename(crimpreef13, c("PAR.Flux.Density"="PAR", "Mean.Wind.Speed..knots."= "Wind_mean"))
+#crimpreef13<-merge(crimpreef13, allreef13_2,by=c("Date_Time","Temperature_clean","Date","Time", "Site","hour", "year", "day", "month"), all=T )
+min.temp <- 15
+crimpreef13$Temperature[crimpreef13$Temperature<=min.temp] <- NA
+crimpreef13
+```
+
+##Figure
+
+```{r}
+crimpreef13$Date<- as.Date(as.POSIXct(crimpreef13$Date, origin="1970-01-01"))
+tempfig<-ggplot(crimpreef13, aes(y=Temperature, x=Date, color=Temperature))+
+  geom_point(size=1)+
+  facet_wrap(~Site, nrow=3)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  scale_color_gradientn(colours=c("#053061","#2166ac",
+"#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.3, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.3, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-09-19")),date_breaks = "1 year", date_labels = "%Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig
+```
+```{r}
+crimpreef13$Date<- as.Date(as.POSIXct(crimpreef13$Date, origin="1970-01-01"))
+tempfig_all<-ggplot(crimpreef13, aes(y=Temperature, x=Date, color=Temperature))+
+  geom_point(size=1)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  scale_color_gradientn(colours=c("#053061","#2166ac",
+"#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.3, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.3, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-09-19")),date_breaks = "1 year", date_labels = "%Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 31), breaks=c(20,22.5,25,27.5,30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig_all
+```
+```{r}
+crimpreef13
+```
+
+
+```{r}
+library(plotrix)
+daily_mean<-crimpreef13%>%
+  group_by(Date)%>%
+  summarize_at(vars(Temperature), funs(mean, std.error,min, max), na.rm=T)
+daily_mean$year <- year(as.POSIXlt(daily_mean$Date))
+daily_mean$month <- month(as.POSIXlt(daily_mean$Date))
+daily_mean
+```
+```{r}
+temp2016v.2023all<-daily_mean%>%
+  filter(Date > "2016-04-01" & Date < "2016-09-20" | Date > "2023-04-01" & Date < "2023-09-20")
+temp2016v.2023all$year<-as.factor(temp2016v.2023all$year)
+temp2016v.2023all$month<-as.factor(temp2016v.2023all$month)
+temp2016v.2023all
+```
+
+```{r}
+temp2016v.2023<-daily_mean%>%
+  dplyr::group_by(year) %>%
+  dplyr::summarise(count=sum(mean > 27.3, na.rm=T))
+temp2016v.2023
+```
+
+
+```{r}
+temp2016v.2023all$Date<- as.Date(as.POSIXct(temp2016v.2023all$Date, origin="1970-01-01"))
+tempfig_2016v2023<-ggplot(temp2016v.2023all, aes(y=mean, x=month, color=year))+
+  #geom_path()+
+  geom_boxplot()+
+  #geom_point(size=1)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  #scale_color_gradientn(colours=c("#053061","#2166ac","#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.3, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.3, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  #scale_x_date(limits=as.Date(c("2016-04-01","2016-09-20")),date_breaks = "3 months", date_labels = "%m %Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 31), breaks=c(20,22.5,25,27.5,30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig_2016v2023
+```
+```{r}
+temp2016v.2023all$Date<- as.Date(as.POSIXct(temp2016v.2023all$Date, origin="1970-01-01"))
+tempfig_2016v2023_2<-ggplot(temp2016v.2023all, aes(y=mean, x=Date, color=year))+
+  geom_line()+
+  #facet_wrap(~year)+
+  #geom_boxplot()+
+  #geom_point(size=1)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  #scale_color_gradientn(colours=c("#053061","#2166ac","#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.3, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.3, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  #scale_x_date(limits=as.Date(c("2016-04-01","2016-09-20")),date_breaks = "3 months", date_labels = "%m %Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 31), breaks=c(20,22.5,25,27.5,30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig_2016v2023_2
+```
+
+```{r}
+crimpreef13$Date<- as.Date(as.POSIXct(crimpreef13$Date, origin="1970-01-01"))
+tempfig_2016v2023<-ggplot(crimpreef13, aes(y=Temperature, x=Date))+
+  #geom_path()+
+  geom_point(size=1)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  #scale_color_gradientn(colours=c("#053061","#2166ac","#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.3, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.3, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_date(limits=as.Date(c("2023-04-01","2023-09-20")),date_breaks = "3 months", date_labels = "%m %Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 31), breaks=c(20,22.5,25,27.5,30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig_2016v2023
+```
+
+```{r}
+tempall<-cowplot::plot_grid(tempfig,tempfig_all, nrow=2, ncol=1, align="h", axis = "bt", rel_heights = c(3, 1.25))
+tempall
+```
+```{r}
+library(plotrix)
+meanminmax<-crimpreef13%>%
+  group_by(Site, year)%>%
+  summarize_at(vars(Temperature), funs(mean, std.error,min, max), na.rm=T)
+meanminmax
+```
+
+###Hotspot
+```{r}
+tempsumall<-summarySE(crimpreef13, measurevar="Temperature", groupvars=c("Date"), na.rm=TRUE)
+tempsumall
+```
+```{r}
+tempsumall<-tempsumall%>%
+  mutate(Hotspot_27.3= ifelse(Temperature >=28.3, Temperature-27.3, 0))%>%
+  mutate(Hotspot_NOAA= ifelse(Temperature >=27.9824, Temperature-26.9824, 0))%>%
+  mutate(Hotspot_Ford= ifelse(Temperature >=28.5, Temperature-27.5, 0)) %>%
+  mutate(Hotspot_Jokiel= ifelse(Temperature >=28.7, Temperature-27.7, 0))
+tempsumall
+```
+
+```{r}
+write.csv(tempsumall,"Reef13 temp hotspot.csv")
+```
+
+##DHW 
+```{r}
+DHW<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef13 temp hotspot through 2023.csv", strip.white=T)
+DHW$Date<- as.Date(DHW$Date)
+DHW
+```
+
+###MMM 27.3
+```{r}
+DHWfigKBay<-ggplot(DHW, aes(y=DHW, x=Date))+
+  geom_line(aes(y=DHW, x=Date), size=0.75, color="grey10", alpha=0.8)+
+  geom_area(aes(y=DHW),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})),)+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-09-19")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay
+```
+
+###NOAA - 27.0
+```{r}
+DHWfigKBay_NOAA<-ggplot(DHW, aes(y=DHW_NOAA, x=Date))+
+  geom_line(aes(y=DHW_NOAA, x=Date), size=0.75, color="grey10", alpha=0.8)+
+  geom_area(aes(y=DHW_NOAA),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("27.0")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_NOAA
+```
+
+###Ford - 27.5
+```{r}
+DHWfigKBay_Ford<-ggplot(DHW, aes(y=DHW_Ford, x=Date))+
+  geom_line(aes(y=DHW_Ford, x=Date), size=0.75, color="grey10", alpha=0.8)+
+  geom_area(aes(y=DHW_Ford),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,7.5), breaks=c(0,2.5,5,7.5))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("27.5")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_Ford
+```
+
+###Innis - 28.0
+```{r}
+DHWfigKBay_Innis<-ggplot(DHW, aes(y=DHW_Innis, x=Date))+
+  geom_line(aes(y=DHW_Innis, x=Date), size=0.75, color="grey55", alpha=0.8)+
+  geom_area(aes(y=DHW_Innis),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("28.0")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_Innis
+```
+
+
+```{r}
+dhw<-cowplot::plot_grid(DHWfigKBay_NOAA,DHWfigKBay_Ford,DHWfigKBay,DHWfigKBay_Innis, nrow=1, align="h", axis = "bt")
+dhw
+```
+
+##Reef 1
+```{r}
+temp<-read.csv("/Users/imkri/Desktop/Penn Postdoc/Hawaii/HIMB temperature 2014-2022.csv", strip.white=T)
+temp$Date<- as.Date(temp$Date, format = "%Y-%m-%d")
+temp$Date_Time<- as.POSIXct(paste(temp$Date, temp$Time), "%Y-%m-%d hh:mm:ss")
+temp<- plyr::rename(temp, c("Water.Temperature..degC."="Temperature"))
+temp
+```
+```{r}
+temp_Q3<-temp%>%
+  group_by(Date)%>%
+  summarize_at(vars(Temperature), funs(Q3 = quantile), probs = 0.975,na.rm=T)
+temp_Q1<-temp%>%
+  group_by(Date)%>%
+  summarize_at(vars(Temperature), funs(Q1 = quantile), probs = 0.025,na.rm=T)
+temp_2<-inner_join(temp,temp_Q3)
+temp_2<-inner_join(temp_2,temp_Q1)
+temp_2<- temp_2 %>%
+  mutate(Temperature_clean=ifelse(Temperature < Q1 | Temperature >Q3| Temperature <18.0| Temperature >30.0,NA,Temperature))
+temp_2$Site<-"Reef1"
+temp_2
+```
+```{r}
+library(lubridate)
+temp_2$hour <- as.POSIXlt(temp_2$Date_Time)$hour
+temp_2$day <- day(as.POSIXlt(temp_2$Date_Time))
+temp_2$month <- month(as.POSIXlt(temp_2$Date_Time))
+temp_2$year <- year(as.POSIXlt(temp_2$Date_Time))
+```
+```{r}
+temp$Date<- as.Date(as.POSIXct(temp$Date, origin="1970-01-01"))
+tempfig_reef1<-ggplot(temp_2, aes(y=Temperature_clean, x=Date, color=Temperature_clean))+
+  geom_point(size=1)+
+  #geom_line(data=crimphimbreef13, aes(y=Temperature_clean, x=Date),size=.1,alpha=0.8,color='black')+
+  #geom_ribbon(data=crimpandhimbmean,aes(ymin=Temperature_clean-se, ymax=Temperature_clean+se), alpha=0.4)+
+  #geom_smooth(method="gam",formula = y ~ s(x, bs = "cs", fx = TRUE, k = 15))+
+  scale_color_gradientn(colours=c("#053061","#2166ac",
+"#92c5de","#4393c3","#fddbc7","#b2182b"), na.value = "grey98",limits = c(20, 30))+ 
+  geom_hline(yintercept = 27.5, linetype="dashed", color = 'black', size=0.7, show.legend = TRUE)+
+  geom_hline(yintercept = 28.5, linetype="solid", color = 'black', size=0.7, show.legend = TRUE)+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks = "1 year", date_labels = "%Y")+
+  scale_y_continuous(expression(Temperature~(degree~C)),limits = c(20, 30))+
+  theme_classic()+
+  theme(axis.text.x=element_text(vjust=0.5,size=12),#angling the labels on the x-axis
+        plot.title = element_text(margin = margin(t = 10, b = 10), hjust=0.5),#telling it where to position our plot title
+        panel.background= element_rect(fill=NA, color='black'),#this is making the black box around the graph
+        #legend.position = c(0.15,0.3),
+        strip.background = element_blank(), 
+        #strip.text = element_blank(),
+        legend.title = element_blank(),
+        #legend.position=c(0.15,0.85),
+        axis.text.y = element_text(vjust=0.5, size=12), #making the axis text larger 
+        axis.title.x = element_blank(),#making the axis title larger 
+        axis.title.y = element_text(size=12))#making the axis title larger 
+tempfig_reef1
+```
+
+```{r}
+tempall<-cowplot::plot_grid(tempfig,tempfig_all,tempfig_reef1, nrow=3, ncol=1, align="h", axis = "bt", rel_heights = c(3, 1.25,1.25))
+tempall
+```
+
+
+###Hotspot
+```{r}
+tempsumall2<-summarySE(temp_2, measurevar="Temperature_clean", groupvars=c("Date"), na.rm=TRUE)
+tempsumall2
+```
+```{r}
+tempsumall2<-tempsumall2%>%
+  mutate(Hotspot_Innis= ifelse(Temperature_clean >=29.0, Temperature_clean-28.0, 0))%>%
+  mutate(Hotspot_NOAA= ifelse(Temperature_clean >=27.9824, Temperature_clean-26.9824, 0))%>%
+  mutate(Hotspot_Ford= ifelse(Temperature_clean >=28.5, Temperature_clean-27.5, 0)) %>%
+  mutate(Hotspot_Jokiel= ifelse(Temperature_clean >=28.7, Temperature_clean-27.7, 0))
+tempsumall2
+```
+
+```{r}
+#write.csv(tempsumall2,"Reef1 temp hotspot.csv")
+```
+
+##DHW 
+```{r}
+DHW_reef1<-read.csv("/Users/imkri/Desktop/Penn postdoc/Hawaii/Reef1 temp DHW .csv", strip.white=T)
+DHW_reef1$Date<- as.Date(DHW_reef1$Date)
+DHW_reef1
+```
+
+###Jokiel - 27.7
+```{r}
+DHWfigKBay2<-ggplot(DHW_reef1, aes(y=DHW_Jokiel, x=Date))+
+  geom_line(aes(y=DHW_Jokiel, x=Date), size=0.75, color="grey55", alpha=0.8)+
+  geom_area(aes(y=DHW_Jokiel),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("27.7")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay2
+```
+
+###NOAA - 27.0
+```{r}
+DHWfigKBay_NOAA2<-ggplot(DHW_reef1, aes(y=DHW_NOAA, x=Date))+
+  geom_line(aes(y=DHW_NOAA, x=Date), size=0.75, color="grey55", alpha=0.8)+
+  geom_area(aes(y=DHW_NOAA),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("27.0")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_NOAA2
+```
+
+###Ford - 27.5
+```{r}
+DHWfigKBay_Ford2<-ggplot(DHW_reef1, aes(y=DHW_Ford, x=Date))+
+  geom_line(aes(y=DHW_Ford, x=Date), size=0.75, color="grey55", alpha=0.8)+
+  geom_area(aes(y=DHW_Ford),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("27.5")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_Ford2
+```
+
+###Innis - 28.0
+```{r}
+DHWfigKBay_Innis2<-ggplot(DHW_reef1, aes(y=DHW_Innis, x=Date))+
+  geom_line(aes(y=DHW_Innis, x=Date), size=0.75, color="grey55", alpha=0.8)+
+  geom_area(aes(y=DHW_Innis),fill="grey",alpha=0.6) +
+  scale_y_continuous(expression(Degree~Heating~Weeks~(degree~C~wk^{-1})), limits=c(0,15), breaks=c(0,2.5,5,7.5,10,12.5,15))+
+  scale_x_date(limits=as.Date(c("2014-01-01","2023-04-15")),date_breaks= "1 year",date_labels = "%Y", expand=c(0.015,0.015))+
+  #scale_x_date(date_breaks= "1 year",date_labels = "%Y")+
+  ggtitle("28.0")+
+  theme_classic()+
+  theme(axis.text.x=element_text(hjust=0.5, size=12),
+        plot.title = element_text(margin = margin(t = 10, b = -20), hjust=0.7),
+        panel.background= element_rect(fill=NA, color='black'),
+        axis.text.y = element_text(vjust=0.5, size=12), 
+        axis.title.x = element_text(vjust=0.5, size=12),
+        axis.title.y = element_text(vjust=0.5, size=12))
+        #legend.position = 'none')
+DHWfigKBay_Innis2
+```
+
+
+```{r}
+dhw<-cowplot::plot_grid(DHWfigKBay_NOAA,DHWfigKBay_Ford,DHWfigKBay,DHWfigKBay_Innis,DHWfigKBay_NOAA2,DHWfigKBay_Ford2,DHWfigKBay2,DHWfigKBay_Innis2, nrow=4, align="h", axis = "bt")
+dhw
+```
